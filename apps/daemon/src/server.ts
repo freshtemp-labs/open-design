@@ -14,6 +14,7 @@ import {
   renderCodexImagegenOverride,
   shouldRenderCodexImagegenOverride,
 } from './prompts/system.js';
+import { expandHomePrefix, resolveProjectRelativePath } from './home-expansion.js';
 import { createCommandInvocation } from '@open-design/platform';
 import {
   buildLiveArtifactsMcpServersForAgent,
@@ -27,6 +28,7 @@ import {
   sanitizeCustomModel,
   spawnEnvForAgent,
 } from './agents.js';
+import { migrateLegacyDataDirSync } from './legacy-data-migrator.js';
 import { findSkillById, listSkills } from './skills.js';
 import { validateLinkedDirs } from './linked-dirs.js';
 import { listCodexPets, readCodexPetSpritesheet } from './codex-pets.js';
@@ -45,6 +47,11 @@ import { subscribe as subscribeFileEvents } from './project-watchers.js';
 import { renderDesignSystemPreview } from './design-system-preview.js';
 import { renderDesignSystemShowcase } from './design-system-showcase.js';
 import { createChatRunService } from './runs.js';
+import {
+  testAgentConnection,
+  testProviderConnection,
+  validateBaseUrl,
+} from './connectionTest.js';
 import { importClaudeDesignZip } from './claude-design-import.js';
 import { listPromptTemplates, readPromptTemplate } from './prompt-templates.js';
 import { buildDocumentPreview } from './document-preview.js';
@@ -668,12 +675,15 @@ const PROMPT_TEMPLATES_DIR = resolveDaemonResourceDir(
 );
 export function resolveDataDir(raw, projectRoot) {
   if (!raw) return path.join(projectRoot, '.od');
-  const expanded = raw.startsWith('~/')
-    ? path.join(os.homedir(), raw.slice(2))
-    : raw;
-  const resolved = path.isAbsolute(expanded)
-    ? expanded
-    : path.resolve(projectRoot, expanded);
+  // expandHomePrefix is shared with media-config.ts so OD_DATA_DIR and
+  // OD_MEDIA_CONFIG_DIR can never split state under a $HOME-style value.
+  // Some launchers (systemd unit files, NixOS modules, certain Docker
+  // entrypoints, Windows scheduled tasks) pass OD_DATA_DIR with literal
+  // $HOME or ${HOME} because the variable is never expanded by a shell;
+  // expandHomePrefix turns those (and the ~ shorthand, with both / and \
+  // separators) into os.homedir() before path.resolve runs so launch
+  // surfaces stay consistent.
+  const resolved = resolveProjectRelativePath(raw, projectRoot);
   try {
     fs.mkdirSync(resolved, { recursive: true });
     fs.accessSync(resolved, fs.constants.W_OK);
@@ -686,6 +696,15 @@ export function resolveDataDir(raw, projectRoot) {
   return resolved;
 }
 const RUNTIME_DATA_DIR = resolveDataDir(process.env.OD_DATA_DIR, PROJECT_ROOT);
+// One-shot legacy data migration. When OD_LEGACY_DATA_DIR is set and the
+// new data root is fresh (no app.sqlite), copy the 0.3.x .od/ payload
+// across before SQLite opens. Synchronous on purpose: openDatabase below
+// would race an async copy. See apps/daemon/src/legacy-data-migrator.ts
+// and https://github.com/nexu-io/open-design/issues/710.
+migrateLegacyDataDirSync({
+  legacyDir: process.env.OD_LEGACY_DATA_DIR,
+  dataDir: RUNTIME_DATA_DIR,
+});
 const ARTIFACTS_DIR = path.join(RUNTIME_DATA_DIR, 'artifacts');
 const PROJECTS_DIR = path.join(RUNTIME_DATA_DIR, 'projects');
 fs.mkdirSync(PROJECTS_DIR, { recursive: true });
@@ -3874,7 +3893,15 @@ export async function startServer({ port = 7456, host = process.env.OD_BIND_HOST
       return design.runs.finish(run, 'failed', 1, null);
     }
 
-    const resolvedBin = resolveAgentBin(agentId);
+    let configuredAgentEnv = {};
+    try {
+      const appConfig = await readAppConfig(RUNTIME_DATA_DIR);
+      configuredAgentEnv = agentCliEnvForAgent(appConfig.agentCliEnv, def.id);
+    } catch {
+      configuredAgentEnv = {};
+    }
+
+    const resolvedBin = resolveAgentBin(agentId, configuredAgentEnv);
 
     const args = def.buildArgs(
       composed,
@@ -3974,14 +4001,6 @@ export async function startServer({ port = 7456, host = process.env.OD_BIND_HOST
           }
         : {}),
     };
-    let configuredAgentEnv = {};
-    try {
-      const appConfig = await readAppConfig(RUNTIME_DATA_DIR);
-      configuredAgentEnv = agentCliEnvForAgent(appConfig.agentCliEnv, def.id);
-    } catch {
-      configuredAgentEnv = {};
-    }
-
     if (run.cancelRequested || design.runs.isTerminal(run.status)) {
       revokeToolToken('child_exit');
       unregisterChatAgentEventSink();
@@ -4004,6 +4023,7 @@ export async function startServer({ port = 7456, host = process.env.OD_BIND_HOST
 
     let child;
     let acpSession = null;
+    let writePromptToChildStdin = false;
     try {
       // Prompt delivery via stdin is now the universal default. This bypasses
       // both the cmd.exe 8KB limit and the CreateProcess 32KB limit.
@@ -4054,7 +4074,7 @@ export async function startServer({ port = 7456, host = process.env.OD_BIND_HOST
             );
           }
         });
-        child.stdin.end(composed, 'utf8');
+        writePromptToChildStdin = true;
       }
     } catch (err) {
       revokeToolToken('child_exit');
@@ -4154,6 +4174,26 @@ export async function startServer({ port = 7456, host = process.env.OD_BIND_HOST
     // plain streams (most other CLIs) we forward raw chunks unchanged so
     // the browser can append them to the assistant's text buffer.
     let agentStreamError = null;
+    // Tracks whether any stream the run is using actually emitted user-
+    // visible content. Only the streams routed through `sendAgentEvent`
+    // contribute to this flag; ACP sessions and plain stdout streams are
+    // covered by their own success/failure paths and the empty-output
+    // guard below skips them via `trackingSubstantiveOutput`.
+    let agentProducedOutput = false;
+    let trackingSubstantiveOutput = false;
+    // Event types that count as "the agent actually produced something the
+    // user can see." Lifecycle markers (`status`) and meter readings
+    // (`usage`) deliberately do NOT count — a model can emit token-usage
+    // numbers for an empty completion (issue #691), and a `status:running`
+    // banner without any follow-up is exactly the silent-failure shape we
+    // want to surface as failed instead of succeeded.
+    const SUBSTANTIVE_AGENT_EVENT_TYPES = new Set([
+      'text_delta',
+      'thinking_delta',
+      'tool_use',
+      'tool_result',
+      'artifact',
+    ]);
     const sendAgentEvent = (ev) => {
       if (ev?.type === 'error') {
         if (agentStreamError) return;
@@ -4164,6 +4204,9 @@ export async function startServer({ port = 7456, host = process.env.OD_BIND_HOST
         }));
         return;
       }
+      if (ev?.type && SUBSTANTIVE_AGENT_EVENT_TYPES.has(ev.type)) {
+        agentProducedOutput = true;
+      }
       send('agent', ev);
     };
 
@@ -4172,6 +4215,7 @@ export async function startServer({ port = 7456, host = process.env.OD_BIND_HOST
       child.stdout.on('data', (chunk) => claude.feed(chunk));
       child.on('close', () => claude.flush());
     } else if (def.streamFormat === 'qoder-stream-json') {
+      trackingSubstantiveOutput = true;
       const qoder = createQoderStreamHandler(sendAgentEvent);
       child.stdout.on('data', (chunk) => qoder.feed(chunk));
       child.on('close', () => qoder.flush());
@@ -4197,9 +4241,15 @@ export async function startServer({ port = 7456, host = process.env.OD_BIND_HOST
         send,
       });
     } else if (def.streamFormat === 'json-event-stream') {
+      // Pipe through sendAgentEvent so the OpenCode `type:'error'` frame
+      // (now emitted as a real error event by json-event-stream.ts after
+      // #691) actually triggers `agentStreamError` instead of being
+      // forwarded as a no-op `agent` SSE event. This also wires the
+      // substantive-output tracking the close handler reads below.
+      trackingSubstantiveOutput = true;
       const handler = createJsonEventStreamHandler(
         def.eventParser || def.id,
-        (ev) => send('agent', ev),
+        sendAgentEvent,
       );
       child.stdout.on('data', (chunk) => handler.feed(chunk));
       child.on('close', () => handler.flush());
@@ -4226,6 +4276,28 @@ export async function startServer({ port = 7456, host = process.env.OD_BIND_HOST
       if (agentStreamError) {
         return design.runs.finish(run, 'failed', code ?? 1, signal ?? null);
       }
+      // Empty-output guard: a clean `code === 0` exit on a stream we are
+      // tracking, with no error frame and no substantive event, means the
+      // run silently finished without producing anything visible. That used
+      // to be marked `succeeded` and rendered as an empty assistant turn —
+      // see issue #691, where OpenCode runs were ending in ~3s with no
+      // chat content and no error banner. Surface an explicit failure
+      // instead so the chat shows a clear reason. ACP sessions and plain
+      // stdout streams are gated out via `trackingSubstantiveOutput`;
+      // their success/failure determination lives elsewhere.
+      if (
+        code === 0 &&
+        !run.cancelRequested &&
+        trackingSubstantiveOutput &&
+        !agentProducedOutput
+      ) {
+        send('error', createSseErrorPayload(
+          'AGENT_EXECUTION_FAILED',
+          'Agent completed without producing any output. The model or provider may have returned an empty response — check the agent logs for upstream errors.',
+          { retryable: true },
+        ));
+        return design.runs.finish(run, 'failed', code, signal);
+      }
       const status = run.cancelRequested
         ? 'canceled'
         : code === 0
@@ -4233,6 +4305,9 @@ export async function startServer({ port = 7456, host = process.env.OD_BIND_HOST
           : 'failed';
       design.runs.finish(run, status, code, signal);
     });
+    if (writePromptToChildStdin && child.stdin) {
+      child.stdin.end(composed, 'utf8');
+    }
   };
 
   app.post('/api/runs', (req, res) => {
@@ -4278,6 +4353,133 @@ export async function startServer({ port = 7456, host = process.env.OD_BIND_HOST
     design.runs.start(run, () => startChatRun(req.body || {}, run));
   });
 
+  // ---- Connection tests (single-shot JSON; no SSE) ------------------------
+  // Settings dialog uses these to verify a config works without sending a
+  // real chat. Always return HTTP 200 with `ok: false` on upstream-caused
+  // failures so the web layer can render a categorized inline status without
+  // unwrapping nested error envelopes; real 4xx/5xx here mean a malformed
+  // request or daemon bug.
+  app.post('/api/test/connection', async (req, res) => {
+    const controller = new AbortController();
+    const abortIfRequestAborted = () => {
+      if ((req.aborted || !req.complete) && !res.writableEnded) {
+        controller.abort();
+      }
+    };
+    const abortIfResponseClosed = () => {
+      if (!res.writableEnded) controller.abort();
+    };
+    req.on('close', abortIfRequestAborted);
+    res.on('close', abortIfResponseClosed);
+    const body = req.body || {};
+    try {
+      if (body.mode === 'provider') {
+        const protocol = body.protocol;
+        if (
+          typeof protocol !== 'string' ||
+          !['anthropic', 'openai', 'azure', 'google'].includes(protocol)
+        ) {
+          return sendApiError(
+            res,
+            400,
+            'BAD_REQUEST',
+            'protocol must be one of anthropic|openai|azure|google',
+          );
+        }
+        if (
+          typeof body.baseUrl !== 'string' ||
+          typeof body.apiKey !== 'string' ||
+          typeof body.model !== 'string' ||
+          !body.baseUrl.trim() ||
+          !body.apiKey.trim() ||
+          !body.model.trim()
+        ) {
+          return sendApiError(
+            res,
+            400,
+            'BAD_REQUEST',
+            'baseUrl, apiKey, and model are required',
+          );
+        }
+        try {
+          const result = await testProviderConnection({
+            protocol,
+            baseUrl: body.baseUrl,
+            apiKey: body.apiKey,
+            model: body.model,
+            apiVersion:
+              typeof body.apiVersion === 'string' ? body.apiVersion : undefined,
+            signal: controller.signal,
+          });
+          return res.json(result);
+        } catch (err) {
+          console.warn(
+            `[test:provider] uncaught: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          return sendApiError(res, 500, 'INTERNAL', 'Connection test failed');
+        }
+      }
+
+      if (body.mode === 'agent') {
+        if (typeof body.agentId !== 'string' || !body.agentId.trim()) {
+          return sendApiError(res, 400, 'BAD_REQUEST', 'agentId is required');
+        }
+        try {
+          const def = getAgentDef(body.agentId);
+          const testStart = Date.now();
+          const safeModel =
+            def && typeof body.model === 'string'
+              ? isKnownModel(def, body.model)
+                ? body.model
+                : sanitizeCustomModel(body.model)
+              : undefined;
+          if (def && typeof body.model === 'string' && body.model.trim() && !safeModel) {
+            return res.json({
+              ok: false,
+              kind: 'invalid_model_id',
+              latencyMs: Date.now() - testStart,
+              model: body.model.trim(),
+              agentName: def.name,
+              detail: 'Invalid custom model id. Use a model id that starts with a letter or number and contains no spaces.',
+            });
+          }
+          const safeReasoning =
+            def &&
+            typeof body.reasoning === 'string' &&
+            Array.isArray(def.reasoningOptions)
+              ? (def.reasoningOptions.find((r) => r.id === body.reasoning)?.id ?? undefined)
+              : undefined;
+          const result = await testAgentConnection({
+            agentId: body.agentId,
+            model: safeModel ?? undefined,
+            reasoning: safeReasoning,
+            agentCliEnv:
+              body.agentCliEnv && typeof body.agentCliEnv === 'object'
+                ? body.agentCliEnv
+                : undefined,
+            signal: controller.signal,
+          });
+          return res.json(result);
+        } catch (err) {
+          console.warn(
+            `[test:agent] uncaught: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          return sendApiError(res, 500, 'INTERNAL', 'Agent test failed');
+        }
+      }
+
+      return sendApiError(
+        res,
+        400,
+        'BAD_REQUEST',
+        'mode must be one of provider|agent',
+      );
+    } finally {
+      req.off('close', abortIfRequestAborted);
+      res.off('close', abortIfResponseClosed);
+    }
+  });
+
   // ---- API Proxy (SSE) for API-compatible endpoints ------------------------
   // Browser → daemon → external API. Avoids CORS issues with third-party
   // providers. This keeps BYOK setup zero-config for local users at the cost of
@@ -4287,28 +4489,7 @@ export async function startServer({ port = 7456, host = process.env.OD_BIND_HOST
     text.replace(/Bearer [A-Za-z0-9_\-.+/=]+/g, 'Bearer [REDACTED]');
 
   const validateExternalApiBaseUrl = (baseUrl) => {
-    let parsed;
-    try {
-      parsed = new URL(baseUrl.replace(/\/+$/, ''));
-    } catch {
-      return { error: 'Invalid baseUrl' };
-    }
-    if (!['http:', 'https:'].includes(parsed.protocol)) {
-      return { error: 'Only http/https allowed' };
-    }
-    const hostname = parsed.hostname.toLowerCase();
-    const isLoopback =
-      ['localhost', '127.0.0.1', '[::1]'].includes(hostname);
-    if (
-      !isLoopback &&
-      (hostname.startsWith('169.254.') ||
-        hostname.startsWith('10.') ||
-        /^192\.168\./.test(hostname) ||
-        /^172\.(1[6-9]|2\d|3[01])\./.test(hostname))
-    ) {
-      return { error: 'Internal IPs blocked', forbidden: true };
-    }
-    return { parsed };
+    return validateBaseUrl(baseUrl);
   };
 
   const proxyErrorCode = (status) => {
