@@ -15,20 +15,20 @@ Token names follow the current product language in `index.css` for core surfaces
 - Border tokens keep the `border-*` scale: `border`, `border-strong`, `border-soft`.
 - Accent tokens keep the `accent-*` scale because user custom accent writes the same CSS variables at runtime.
 - Status tokens use semantic names in Tailwind: `success`, `info`, `discovery`, `danger`, `warning`.
-- Tailwind utility names should read as project concepts: `bg-panel`, `text-muted`, `border-border-strong`, `text-danger`, `bg-success-surface`.
-- Radius, shadow, font, spacing, and typography scale use Tailwind's native utilities such as `rounded-lg`, `shadow-sm`, `font-mono`, `gap-3`, and `text-sm`.
+- Tailwind utility names should read as project concepts: `bg-panel`, `text-muted`, `border-border-strong`, `text-danger`, `bg-success-surface`, `rounded-card`, and `shadow-token-sm`.
+- Radius and shadow utilities use project theme aliases backed by `--radius*` and `--shadow*`; font, spacing, and typography scale use Tailwind's native utilities such as `font-mono`, `gap-3`, and `text-sm`.
 
-## Design decision: color tokens only
+## Design decision: token-backed color, radius, and shadow
 
-Project-owned tokens are limited to colors because color carries Open Design's brand, warm paper surface language, light/dark theme behavior, and runtime custom accent behavior.
+Project-owned tokens cover colors, radius, and shadow because color carries Open Design's brand and theme behavior, while existing cards, popovers, modals, and controls depend on project radius and shadow variables for visual stability.
 
-Radius, shadow, font, spacing, and type scale use Tailwind's native system. These primitives are already well understood by Tailwind users, avoid extra project vocabulary, and keep TSX class names familiar during migration:
+Radius and shadow aliases resolve to the current CSS variables, including dark-theme shadow overrides. Font, spacing, and type scale use Tailwind's native system to keep TSX class names familiar during migration:
 
 ```tsx
-className="rounded-lg shadow-sm font-mono bg-panel text-text border border-border"
+className="rounded-card shadow-token-sm font-mono bg-panel text-text border border-border"
 ```
 
-Global base styles in `index.css` continue to set the app-level font family, page background, and text color. Component-level font changes can use native Tailwind utilities. If a future visual requirement needs a branded radius or elevation with stable cross-component meaning, add that token intentionally at that time.
+Global base styles in `index.css` continue to set the app-level font family, page background, and text color. Component-level font changes can use native Tailwind utilities. If a future visual requirement needs another branded elevation or shape with stable cross-component meaning, add that token intentionally at that time.
 
 ## `@theme` block
 
@@ -89,6 +89,18 @@ Global base styles in `index.css` continue to set the app-level font family, pag
   --color-overlay: rgba(28, 27, 26, 0.42);
   --color-control-hover: var(--bg-subtle);
   --color-control-active: var(--bg-muted);
+
+  /* Radius */
+  --radius-control: var(--radius-sm);
+  --radius-card: var(--radius);
+  --radius-panel: var(--radius-lg);
+  --radius-token-pill: var(--radius-pill);
+
+  /* Shadows */
+  --shadow-token-xs: var(--shadow-xs);
+  --shadow-token-sm: var(--shadow-sm);
+  --shadow-token-md: var(--shadow-md);
+  --shadow-token-lg: var(--shadow-lg);
 }
 ```
 
@@ -166,12 +178,20 @@ Global base styles in `index.css` continue to set the app-level font family, pag
 | `--bg-subtle` | `--color-control-hover` | `bg-control-hover` | Default neutral hover fill for controls. |
 | `--bg-muted` | `--color-control-active` | `bg-control-active` | Neutral pressed/active fill for controls. |
 
+### Radius and shadow
+
+| Existing CSS variable | Tailwind behavior | Utility examples | Intended use |
+| --- | --- | --- | --- |
+| `--radius-sm` | Expose as `--radius-control`. | `rounded-control` | Buttons, compact inputs, small controls. |
+| `--radius` | Expose as `--radius-card`. | `rounded-card` | Cards, list rows, standard panels. |
+| `--radius-lg` | Expose as `--radius-panel`. | `rounded-panel` | Popovers, modals, elevated panels. |
+| `--radius-pill` | Expose as `--radius-token-pill`. | `rounded-token-pill` | Pills, badges, segmented controls. |
+| `--shadow-xs`, `--shadow-sm`, `--shadow-md`, `--shadow-lg` | Expose as `--shadow-token-xs`, `--shadow-token-sm`, `--shadow-token-md`, and `--shadow-token-lg`. | `shadow-token-xs`, `shadow-token-sm`, `shadow-token-md`, `shadow-token-lg` | Subtle controls, selected cards, popovers, modals, including dark-theme overrides. |
+
 ### Native Tailwind primitives
 
 | Existing CSS variable | Tailwind behavior | Utility examples | Intended use |
 | --- | --- | --- | --- |
-| `--radius-sm`, `--radius`, `--radius-lg`, `--radius-pill` | Keep as CSS variables for retained global CSS. Use Tailwind native radius utilities in migrated TSX. | `rounded-sm`, `rounded-md`, `rounded-lg`, `rounded-full` | Buttons, inputs, cards, modals, pills, avatars. |
-| `--shadow-xs`, `--shadow-sm`, `--shadow-md`, `--shadow-lg` | Keep as CSS variables for retained global CSS. Use Tailwind native shadow utilities in migrated TSX. | `shadow-xs`, `shadow-sm`, `shadow-md`, `shadow-lg` | Subtle controls, selected cards, popovers, modals. |
 | `--sans`, `--serif`, `--mono` | Keep as CSS variables for base/global CSS. Use Tailwind native font utilities in migrated TSX. | `font-sans`, `font-serif`, `font-mono` | UI text, editorial moments, code/file paths. |
 
 ## Utility vocabulary
@@ -187,10 +207,10 @@ Use this vocabulary for TSX migrations.
 - Status: `text-success`, `bg-success-surface`, `border-success-border`, `text-info`, `bg-info-surface`, `border-info-border`, `text-discovery`, `bg-discovery-surface`, `border-discovery-border`, `text-danger`, `bg-danger-surface`, `border-danger-border`, `text-warning`, `bg-warning-surface`, `border-warning-border`.
 - Interaction: `outline-focus`, `ring-focus`, `ring-focus-ring`, `bg-overlay`, `bg-control-hover`, `bg-control-active`.
 
-### Native utility examples
+### Utility examples
 
-- Radius: `rounded-sm`, `rounded-md`, `rounded-lg`, `rounded-full`.
-- Shadows: `shadow-xs`, `shadow-sm`, `shadow-md`, `shadow-lg`.
+- Radius: `rounded-control`, `rounded-card`, `rounded-panel`, `rounded-token-pill`.
+- Shadows: `shadow-token-xs`, `shadow-token-sm`, `shadow-token-md`, `shadow-token-lg`.
 - Fonts: `font-sans`, `font-serif`, `font-mono`.
 
 ## Migration rules
@@ -198,9 +218,10 @@ Use this vocabulary for TSX migrations.
 1. Use Open Design color token utilities for app UI chrome and component styling.
 2. Keep raw CSS variables as the visual source in `index.css`; Tailwind `@theme` tokens should reference `var(--*)` for theme-sensitive values.
 3. Use status names in TSX. Examples: `text-danger`, `bg-success-surface`, `border-info-border`.
-4. Keep brand assets, SVG illustration colors, sketch/canvas user colors, and file color conversion helpers as documented exceptions.
-5. Add one color token before repeating the same arbitrary color value in multiple components.
-6. Keep complex one-off gradients and `color-mix()` expressions local during migration only when they encode component-specific art direction; promote repeated patterns into the interaction/status tokens above.
+4. Use project-backed radius and shadow utilities for migrated components that currently depend on `--radius*` or `--shadow*`; examples include `rounded-card`, `rounded-panel`, `shadow-token-sm`, and `shadow-token-md`.
+5. Keep brand assets, SVG illustration colors, sketch/canvas user colors, and file color conversion helpers as documented exceptions.
+6. Add one color token before repeating the same arbitrary color value in multiple components.
+7. Keep complex one-off gradients and `color-mix()` expressions local during migration only when they encode component-specific art direction; promote repeated patterns into the interaction/status tokens above.
 
 ## Existing conflicts and exception handling
 
