@@ -1,7 +1,7 @@
 ---
 id: 20260511-default-english-resource-i18n-fallback
 name: Default English Resource I18n Fallback
-status: designed
+status: implemented
 created: '2026-05-11'
 ---
 
@@ -204,30 +204,37 @@ type LocalizedContentIds = {
 
 ## Plan
 
-- [ ] Step 1: Remove manual fallback arrays from web i18n
-  - [ ] Substep 1.1 Implement: Remove fallback array fields from `LocalizedContentBundle` in `apps/web/src/i18n/content.ts`.
-  - [ ] Substep 1.2 Implement: Remove `DE_*_IDS_WITH_EN_FALLBACK`, `FR_*_IDS_WITH_EN_FALLBACK`, and `RU_*_IDS_WITH_EN_FALLBACK` definitions/imports/exports.
-  - [ ] Substep 1.3 Implement: Keep localized-copy-first English fallback in `localizeSkill*`, `localizeDesignSystemSummary`, and `localizePromptTemplateSummary`.
-  - [ ] Substep 1.4 Verify: Add or update web i18n tests for localized copy precedence and English field fallback.
-- [ ] Step 2: Update localized resource coverage semantics
-  - [ ] Substep 2.1 Implement: Update `e2e/tests/localized-content.test.ts` to discover skills, design systems, and prompt templates with fail-fast parsing.
-  - [ ] Substep 2.2 Implement: Assert required English fallback fields exist: skill description, design-system summary/category fallback input, prompt-template title and summary.
-  - [ ] Substep 2.3 Implement: Keep category and tag coverage against localized dictionaries for `de`, `fr`, and `ru`.
-  - [ ] Substep 2.4 Implement: Add clear assertion messages that distinguish missing English fallback fields from missing category/tag translations.
-  - [ ] Substep 2.5 Verify: Run the localized-content e2e test file.
-- [ ] Step 3: Clean up docs and validate
-  - [ ] Substep 3.1 Implement: Remove comments that describe fallback arrays as required bookkeeping.
-  - [ ] Substep 3.2 Verify: Run affected web/e2e typechecks and tests.
-  - [ ] Substep 3.3 Verify: Run `pnpm guard` and `pnpm typecheck`.
+- [x] Step 1: Remove manual fallback arrays from web i18n
+  - [x] Substep 1.1 Implement: Remove fallback array fields from `LocalizedContentBundle` in `apps/web/src/i18n/content.ts`.
+  - [x] Substep 1.2 Implement: Remove `DE_*_IDS_WITH_EN_FALLBACK`, `FR_*_IDS_WITH_EN_FALLBACK`, and `RU_*_IDS_WITH_EN_FALLBACK` definitions/imports/exports.
+  - [x] Substep 1.3 Implement: Keep localized-copy-first English fallback in `localizeSkill*`, `localizeDesignSystemSummary`, and `localizePromptTemplateSummary`.
+  - [x] Substep 1.4 Verify: Add or update web i18n tests for localized copy precedence and English field fallback.
+- [x] Step 2: Update localized resource coverage semantics
+  - [x] Substep 2.1 Implement: Update `e2e/tests/localized-content.test.ts` to discover skills, design systems, and prompt templates with fail-fast parsing.
+  - [x] Substep 2.2 Implement: Assert required English fallback fields exist: skill description, design-system summary/category fallback input, prompt-template title and summary.
+  - [x] Substep 2.3 Implement: Keep category and tag coverage against localized dictionaries for `de`, `fr`, and `ru`.
+  - [x] Substep 2.4 Implement: Add clear assertion messages that distinguish missing English fallback fields from missing category/tag translations.
+  - [x] Substep 2.5 Verify: Run the localized-content e2e test file.
+- [x] Step 3: Clean up docs and validate
+  - [x] Substep 3.1 Implement: Remove comments that describe fallback arrays as required bookkeeping.
+  - [x] Substep 3.2 Verify: Run affected web/e2e typechecks and tests.
+  - [x] Substep 3.3 Verify: Run `pnpm guard` and `pnpm typecheck`.
 
 ## Notes
 
-<!-- Optional sections — add what's relevant. -->
-
 ### Implementation
 
-<!-- Files created/modified, decisions made during coding, deviations from design -->
+- `apps/web/src/i18n/content.ts` - removed fallback ID fields and arrays; `LOCALIZED_CONTENT_IDS` now derives IDs from localized copy/category/tag dictionaries only.
+- `apps/web/src/i18n/content.fr.ts` - removed French exported fallback ID arrays.
+- `apps/web/src/i18n/content.ru.ts` - removed Russian exported fallback ID arrays.
+- `apps/web/tests/i18n/content.test.ts` - added runtime coverage for localized precedence, English fallback, and localized ID derivation.
+- `e2e/tests/localized-content.test.ts` - moved resource displayability coverage to discovered English resource fields, added fail-fast resource parsing, and kept localized category/tag coverage for `de`, `fr`, and `ru`.
 
 ### Verification
 
-<!-- How the feature was verified: tests written, manual testing steps, results -->
+- `pnpm --filter @open-design/web exec vitest run -c vitest.config.ts tests/i18n/content.test.ts` - passed.
+- `pnpm typecheck` from `e2e/` - passed.
+- `pnpm test tests/localized-content.test.ts` from `e2e/` - passed.
+- Reviewer subagent - no blocking issues after fixes.
+- `pnpm guard` - passed.
+- `pnpm typecheck` - passed.
