@@ -150,23 +150,23 @@ spawnAgent:
 
 ## Plan
 
-- [ ] Step 1: Harden shared PATH discovery
-  - [ ] Substep 1.1 Implement: Add or confirm semver-desc nvm bin ordering in `wellKnownUserToolchainBins()`.
-  - [ ] Substep 1.2 Implement: Keep packaged PATH and daemon resolver consuming the platform helper.
-  - [ ] Substep 1.3 Verify: Add fixture HOME tests for LaunchServices-style PATH and nvm bins.
-- [ ] Step 2: Share agent launch resolution
-  - [ ] Substep 2.1 Implement: Add launch-resolution type and helper for selected path, launch path, launch kind, and child PATH patch.
-  - [ ] Substep 2.2 Implement: Prepend selected executable dirname to child PATH for absolute resolved paths.
-  - [ ] Substep 2.3 Implement: Wire connection test and formal run to the shared helper.
-  - [ ] Substep 2.4 Verify: Add daemon tests for wrapper shebang resolving node from selected executable dirname.
-- [ ] Step 3: Add Codex native unwrap
-  - [ ] Substep 3.1 Implement: Detect Codex npm wrapper and resolve platform native binary.
-  - [ ] Substep 3.2 Implement: Preserve configured `CODEX_BIN` priority across wrapper and native paths.
-  - [ ] Substep 3.3 Implement: Add diagnostics and wrapper fallback when native unwrap fails.
-  - [ ] Substep 3.4 Verify: Add Codex wrapper fixture tests for native success, direct native config, and fallback diagnostics.
+- [x] Step 1: Harden shared PATH discovery
+  - [x] Substep 1.1 Implement: Add or confirm semver-desc nvm bin ordering in `wellKnownUserToolchainBins()`.
+  - [x] Substep 1.2 Implement: Keep packaged PATH and daemon resolver consuming the platform helper.
+  - [x] Substep 1.3 Verify: Add fixture HOME tests for LaunchServices-style PATH and nvm bins.
+- [x] Step 2: Share agent launch resolution
+  - [x] Substep 2.1 Implement: Add launch-resolution type and helper for selected path, launch path, launch kind, and child PATH patch.
+  - [x] Substep 2.2 Implement: Prepend selected executable dirname to child PATH for absolute resolved paths.
+  - [x] Substep 2.3 Implement: Wire connection test and formal run to the shared helper.
+  - [x] Substep 2.4 Verify: Add daemon tests for wrapper shebang resolving node from selected executable dirname.
+- [x] Step 3: Add Codex native unwrap
+  - [x] Substep 3.1 Implement: Detect Codex npm wrapper and resolve platform native binary.
+  - [x] Substep 3.2 Implement: Preserve configured `CODEX_BIN` priority across wrapper and native paths.
+  - [x] Substep 3.3 Implement: Add diagnostics and wrapper fallback when native unwrap fails.
+  - [x] Substep 3.4 Verify: Add Codex wrapper fixture tests for native success, direct native config, and fallback diagnostics.
 - [ ] Step 4: Validate end-to-end behavior
-  - [ ] Substep 4.1 Verify: Run platform, packaged, and daemon scoped tests.
-  - [ ] Substep 4.2 Verify: Run `pnpm guard` and `pnpm typecheck`.
+  - [x] Substep 4.1 Verify: Run platform, packaged, and daemon scoped tests.
+  - [x] Substep 4.2 Verify: Run `pnpm guard` and `pnpm typecheck`.
   - [ ] Substep 4.3 Verify: Manually test packaged/Desktop Codex connection with nvm npm-installed Codex.
 
 ## Notes
@@ -175,8 +175,20 @@ spawnAgent:
 
 ### Implementation
 
-<!-- Files created/modified, decisions made during coding, deviations from design -->
+- `packages/platform/src/index.ts` - sorted versioned mise/nvm/fnm Node toolchain bins deterministically by semver descending.
+- `packages/platform/tests/index.test.ts` - added fixture coverage for LaunchServices-style PATH and nvm version ordering.
+- `apps/daemon/src/runtimes/launch.ts` - added shared agent launch resolution, child PATH prepend, Codex native binary lookup, and wrapper fallback diagnostics.
+- `apps/daemon/src/connectionTest.ts` - wired connection tests to shared launch resolution and child PATH patching.
+- `apps/daemon/src/server.ts` - wired formal agent runs to shared launch resolution and child PATH patching.
+- `apps/daemon/src/agents.ts`, `apps/daemon/tests/runtimes/helpers/test-helpers.ts` - exported launch helpers.
+- `apps/daemon/tests/runtimes/launch.test.ts` - covered PATH prepend/dedupe, minimal-PATH nvm Codex resolution, native unwrap success, direct native `CODEX_BIN`, and wrapper fallback diagnostics.
 
 ### Verification
 
-<!-- How the feature was verified: tests written, manual testing steps, results -->
+- Passed: `pnpm --filter @open-design/platform test`.
+- Passed: `pnpm --filter @open-design/daemon exec vitest run -c vitest.config.ts tests/runtimes/launch.test.ts tests/runtimes/executables.test.ts tests/runtimes/env-and-detection.test.ts`.
+- Passed: `pnpm --filter @open-design/daemon exec vitest run -c vitest.config.ts tests/runtimes/launch.test.ts` after adding direct native `CODEX_BIN` coverage.
+- Passed: `pnpm --filter @open-design/packaged exec vitest run -c vitest.config.ts tests/sidecars.test.ts`.
+- Passed: `pnpm guard`.
+- Initial `pnpm typecheck` failed because workspace dependencies were not installed for `apps/telemetry-worker`; after `pnpm install`, `pnpm typecheck` passed.
+- Pending: packaged/Desktop manual Codex connection validation with an nvm npm-installed Codex.
