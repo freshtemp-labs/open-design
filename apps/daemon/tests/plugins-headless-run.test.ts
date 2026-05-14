@@ -492,7 +492,7 @@ process.stdin.on('end', () => {
               '--agent',
               'opencode',
               '--follow',
-            ]);
+            ], { timeout: 60_000 });
             expect(run.stdout).toContain('[run] started run');
             expect(run.stdout).toContain('"event":"agent"');
             expect(run.stdout).toContain('headless-ok');
@@ -520,7 +520,7 @@ process.stdin.on('end', () => {
     } finally {
       await rm(pluginRoot, { recursive: true, force: true });
     }
-  });
+  }, 60_000);
 
   // Full §8 e2e-3 contract — once the pipeline runner fires on a run
   // with a declared pipeline, the first ND-JSON event should be

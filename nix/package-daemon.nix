@@ -32,10 +32,9 @@
 #   see flake.nix for the override and how to bump the hash when
 #   `packageManager` advances.
 #
-# Workspace siblings the daemon depends on (contracts, sidecar-proto,
-# sidecar, platform) are built in dependency order before the daemon
-# itself; tsc emits each package's dist/, which is what the daemon
-# resolves at runtime via pnpm's symlinked node_modules.
+# Workspace siblings the daemon depends on are built in dependency order
+# before the daemon itself; tsc emits each package's dist/, which is what
+# the daemon resolves at runtime via pnpm's symlinked node_modules.
 let
   pname = "open-design-daemon";
   version = (lib.importJSON ../package.json).version;
@@ -136,6 +135,9 @@ in
 
       for target in \
         packages/contracts \
+        packages/agui-adapter \
+        packages/plugin-runtime \
+        packages/registry-protocol \
         packages/sidecar-proto \
         packages/sidecar \
         packages/platform \
