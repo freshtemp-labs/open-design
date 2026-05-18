@@ -524,10 +524,20 @@ describe('connectors tool CLI', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({
         ok: true,
         output: { data: { tree: [
+          { path: 'build/logo.png', type: 'blob' },
           { path: 'package.json', type: 'blob' },
+          { path: 'src/pages/home/HomePage.tsx', type: 'blob' },
           { path: 'src/components/Button.tsx', type: 'blob' },
           { path: 'src/styles.css', type: 'blob' },
         ] } },
+      }), { headers: { 'Content-Type': 'application/json' }, status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        ok: true,
+        output: { data: { encoding: 'base64', content: Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString('base64') } },
+      }), { headers: { 'Content-Type': 'application/json' }, status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        ok: true,
+        output: { data: 'export function HomePage(){ return <main className="workspace" /> }' },
       }), { headers: { 'Content-Type': 'application/json' }, status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         ok: true,
@@ -543,7 +553,7 @@ describe('connectors tool CLI', () => {
         output: { data: '{"dependencies":{"@radix-ui/react-slot":"latest"}}' },
       }), { headers: { 'Content-Type': 'application/json' }, status: 200 }));
 
-    const result = await runConnectorsToolCli(['github-design-context', '--repo', 'acme/ui', '--max-files', '3']);
+    const result = await runConnectorsToolCli(['github-design-context', '--repo', 'acme/ui', '--max-files', '5']);
 
     expect(result.exitCode).toBe(0);
     const stdout = JSON.parse(stdoutOutput.join(''));
@@ -552,15 +562,32 @@ describe('connectors tool CLI', () => {
       repo: 'acme/ui',
       method: 'connector',
       outputPath: 'context/github/acme-ui.md',
+      snapshotFiles: expect.arrayContaining([
+        'context/github/acme-ui/files/build/logo.png',
+        'context/github/acme-ui/files/src/pages/home/HomePage.tsx',
+      ]),
+      materializedFiles: expect.arrayContaining([
+        'build/logo.png',
+        'source_examples/src/pages/home/HomePage.tsx',
+      ]),
     }));
     const evidenceNote = await readFile(path.join(tmpDir, 'context/github/acme-ui.md'), 'utf8');
     expect(evidenceNote).toContain('GitHub connector was used');
     expect(evidenceNote).toContain('Source Evidence Inventory');
+    expect(evidenceNote).toContain('Package Files Materialized');
+    expect(evidenceNote).toContain('`build/logo.png`');
+    expect(evidenceNote).toContain('`source_examples/src/pages/home/HomePage.tsx`');
     expect(evidenceNote).toContain('Theme, tokens, and styling');
     expect(evidenceNote).toContain('Reusable components');
     expect(evidenceNote).toContain('ui_kits/app/index.html` must be a browser-reviewable component entry');
     expect(evidenceNote).toContain('ui_kits/app/components/App.jsx` (or equivalent app shell) must compose source-backed role components');
+    expect(evidenceNote).toContain('Claude-style UI-kit entry skeleton for direct JSX kits');
+    expect(evidenceNote).toContain('<script type="text/babel" src="components/ComponentName.jsx"></script>');
+    expect(evidenceNote).toContain('ReactDOM.createRoot(document.getElementById("root"))');
     expect(evidenceNote).toContain('source_examples/');
+    const materializedLogo = await readFile(path.join(tmpDir, 'build/logo.png'));
+    expect([...materializedLogo]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+    await expect(readFile(path.join(tmpDir, 'source_examples/src/pages/home/HomePage.tsx'), 'utf8')).resolves.toContain('HomePage');
     await expect(readFile(path.join(tmpDir, 'context/github/acme-ui/files/src/components/Button.tsx'), 'utf8')).resolves.toContain('rounded-md');
     expect(fetchMock).toHaveBeenCalledWith(
       'http://127.0.0.1:7456/api/tools/connectors/execute',
@@ -578,14 +605,19 @@ describe('connectors tool CLI', () => {
     process.chdir(tmpDir);
     const sourceDir = path.join(tmpDir, 'cherry-studio');
     await mkdir(path.join(sourceDir, 'src/components'), { recursive: true });
+    await mkdir(path.join(sourceDir, 'src/pages/home'), { recursive: true });
     await mkdir(path.join(sourceDir, 'src/assets/fonts/ubuntu'), { recursive: true });
     await mkdir(path.join(sourceDir, 'build'), { recursive: true });
+    await mkdir(path.join(tmpDir, 'build'), { recursive: true });
     await writeFile(path.join(sourceDir, 'README.md'), '# Cherry Studio\n\nDesktop AI chat workspace.');
     await writeFile(path.join(sourceDir, 'package.json'), JSON.stringify({ name: 'cherry-studio' }));
     await writeFile(path.join(sourceDir, 'src/styles.css'), ':root { --color-primary: #db6f57; }');
     await writeFile(path.join(sourceDir, 'src/components/Button.tsx'), 'export function Button() { return <button className="rounded-lg" />; }');
+    await writeFile(path.join(sourceDir, 'src/pages/home/HomePage.tsx'), 'export function HomePage() { return <main />; }');
     await writeFile(path.join(sourceDir, 'src/assets/fonts/ubuntu/Ubuntu-Regular.ttf'), Buffer.from('font-data'));
+    await writeFile(path.join(sourceDir, 'build/icon.png'), Buffer.from('source-icon'));
     await writeFile(path.join(sourceDir, 'build/logo.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    await writeFile(path.join(tmpDir, 'build/icon.png'), Buffer.from('existing-icon'));
 
     const result = await runConnectorsToolCli([
       'local-design-context',
@@ -594,11 +626,12 @@ describe('connectors tool CLI', () => {
       '--output',
       'context/local-code/cherry-studio.md',
       '--max-files',
-      '8',
+      '10',
     ]);
 
     expect(result.exitCode).toBe(0);
-    expect(JSON.parse(stdoutOutput.join(''))).toMatchObject({
+    const output = JSON.parse(stdoutOutput.join(''));
+    expect(output).toMatchObject({
       ok: true,
       sourcePath: sourceDir,
       method: 'local-folder',
@@ -607,22 +640,38 @@ describe('connectors tool CLI', () => {
         'context/local-code/cherry-studio/files/package.json',
         'context/local-code/cherry-studio/files/src/styles.css',
         'context/local-code/cherry-studio/files/src/components/Button.tsx',
+        'context/local-code/cherry-studio/files/src/pages/home/HomePage.tsx',
         'context/local-code/cherry-studio/files/src/assets/fonts/ubuntu/Ubuntu-Regular.ttf',
         'context/local-code/cherry-studio/files/build/logo.png',
       ]),
+      materializedFiles: expect.arrayContaining([
+        'build/logo.png',
+        'source_examples/src/pages/home/HomePage.tsx',
+      ]),
     });
+    expect(output.materializedFiles).not.toEqual(expect.arrayContaining(['build/icon.png']));
     const evidenceNote = await readFile(path.join(tmpDir, 'context/local-code/cherry-studio.md'), 'utf8');
     expect(evidenceNote).toContain('Local Design Evidence');
     expect(evidenceNote).toContain('Source Evidence Inventory');
+    expect(evidenceNote).toContain('Package Files Materialized');
+    expect(evidenceNote).toContain('`build/logo.png`');
+    expect(evidenceNote).toContain('`source_examples/src/pages/home/HomePage.tsx`');
     expect(evidenceNote).toContain('Brand assets and icons');
     expect(evidenceNote).toContain('root `build/` with their original filenames');
     expect(evidenceNote).toContain('Fonts');
     expect(evidenceNote).toContain('Claude Design-style package');
     expect(evidenceNote).toContain('ui_kits/app/index.html` must be a browser-reviewable component entry');
     expect(evidenceNote).toContain('ui_kits/app/components/App.jsx` (or equivalent app shell) must compose source-backed role components');
+    expect(evidenceNote).toContain('Claude-style UI-kit entry skeleton for direct JSX kits');
+    expect(evidenceNote).toContain('<script type="text/babel" src="components/ComponentName.jsx"></script>');
+    expect(evidenceNote).toContain('ReactDOM.createRoot(document.getElementById("root"))');
     expect(evidenceNote).toContain('source_examples/');
     expect(evidenceNote).toContain('context/.../files/build/icon.png` -> `build/icon.png`');
     await expect(readFile(path.join(tmpDir, 'context/local-code/cherry-studio/files/src/styles.css'), 'utf8')).resolves.toContain('--color-primary');
+    await expect(readFile(path.join(tmpDir, 'source_examples/src/pages/home/HomePage.tsx'), 'utf8')).resolves.toContain('HomePage');
+    const materializedLogo = await readFile(path.join(tmpDir, 'build/logo.png'));
+    expect([...materializedLogo]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+    await expect(readFile(path.join(tmpDir, 'build/icon.png'), 'utf8')).resolves.toBe('existing-icon');
     const fontBytes = await readFile(path.join(tmpDir, 'context/local-code/cherry-studio/files/src/assets/fonts/ubuntu/Ubuntu-Regular.ttf'));
     expect(fontBytes.length).toBeGreaterThan(0);
 
@@ -671,6 +720,12 @@ describe('connectors tool CLI', () => {
       'context/local-code/cherry-core/files/src/renderer/src/pages/settings/AgentSettings/components/AdvancedSettings.tsx',
       'context/local-code/cherry-core/files/src/renderer/src/pages/home/Messages/__tests__/MessageGroup.test.tsx',
     ]));
+    expect(output.materializedFiles).toEqual(expect.arrayContaining([
+      'source_examples/src/renderer/src/pages/home/HomePage.tsx',
+      'source_examples/src/renderer/src/pages/home/Chat.tsx',
+      'source_examples/src/renderer/src/pages/home/Inputbar/Inputbar.tsx',
+    ]));
+    await expect(readFile(path.join(tmpDir, 'source_examples/src/renderer/src/pages/home/HomePage.tsx'), 'utf8')).resolves.toContain('HomePage.tsx');
     const evidenceNote = await readFile(path.join(tmpDir, 'context/local-code/cherry-core.md'), 'utf8');
     expect(evidenceNote).toContain('App shell and navigation');
     expect(evidenceNote).toContain('Chat and input surfaces');

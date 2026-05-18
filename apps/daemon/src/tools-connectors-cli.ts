@@ -70,6 +70,16 @@ const MAX_CONNECTOR_DIRECTORY_SCAN_DIRS = 48;
 const GITHUB_CLONE_TIMEOUT_MS = 120_000;
 const GH_AUTH_TIMEOUT_MS = 10_000;
 const MAX_PROCESS_OUTPUT_CHARS = 8_000;
+const UI_KIT_ENTRY_GUIDANCE = [
+  '- Claude-style UI-kit entry skeleton for direct JSX kits:',
+  '  - `<script src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>`',
+  '  - `<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>`',
+  '  - `<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>`',
+  '  - `<link rel="stylesheet" href="../../colors_and_type.css">`',
+  '  - `<div id="root"></div>`',
+  '  - Load role components from `components/*.jsx` with `<script type="text/babel" src="components/ComponentName.jsx"></script>`.',
+  '  - Mount with `const { App } = window; const root = ReactDOM.createRoot(document.getElementById("root")); root.render(<App />);`.',
+];
 
 interface ParsedGitHubRepo {
   owner: string;
@@ -96,6 +106,7 @@ interface GithubDesignEvidence {
   readme?: { path: string; content: string };
   treePaths: string[];
   files: GithubSnapshotFile[];
+  materializedFiles?: string[];
   warnings: string[];
 }
 
@@ -121,6 +132,7 @@ interface LocalDesignEvidence {
   method: 'local-folder';
   treePaths: string[];
   files: GithubSnapshotFile[];
+  materializedFiles?: string[];
   readme?: { path: string; content: string };
   warnings: string[];
 }
@@ -353,6 +365,10 @@ async function ensureParentDirectory(filePath: string): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });
 }
 
+function isAbsenceError(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT');
+}
+
 async function requestJsonOrThrow(baseUrl: URL, token: string, pathname: string, init: RequestInit = {}): Promise<unknown> {
   const response = await requestJson(baseUrl, token, pathname, init);
   if (response.status >= 200 && response.status < 300) return response.body;
@@ -432,7 +448,38 @@ function decodeContentPayload(value: unknown): string | undefined {
 }
 
 function decodeBase64Content(value: string): string {
-  return Buffer.from(value.replace(/\s+/gu, ''), 'base64').toString('utf8');
+  return decodeBase64Buffer(value).toString('utf8');
+}
+
+function decodeBase64Buffer(value: string): Buffer {
+  return Buffer.from(value.replace(/\s+/gu, ''), 'base64');
+}
+
+function decodeBinaryContentPayload(value: unknown): Buffer | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const decoded = decodeBinaryContentPayload(item);
+      if (decoded) return decoded;
+    }
+    return undefined;
+  }
+  const record = value as JsonObject;
+  const content = typeof record.content === 'string'
+    ? record.content
+    : typeof record.data === 'string'
+      ? record.data
+      : undefined;
+  if (content !== undefined) {
+    const encoding = typeof record.encoding === 'string' ? record.encoding.toLowerCase() : '';
+    if (encoding === 'base64') return decodeBase64Buffer(content);
+  }
+  for (const [key, child] of Object.entries(record)) {
+    if (key === 'mimetype' || key === 'name' || key === 's3url') continue;
+    const decoded = decodeBinaryContentPayload(child);
+    if (decoded) return decoded;
+  }
+  return undefined;
 }
 
 function findConnectorSignedContentUrl(value: unknown): string | undefined {
@@ -464,6 +511,37 @@ async function readConnectorTextContent(value: unknown): Promise<string | undefi
   }
   const text = await response.text();
   return text.slice(0, MAX_CONTEXT_FILE_BYTES);
+}
+
+async function readConnectorBinaryContent(value: unknown): Promise<Buffer | undefined> {
+  const decoded = decodeBinaryContentPayload(value);
+  if (decoded) return decoded;
+  const signedUrl = findConnectorSignedContentUrl(value);
+  if (!signedUrl) return undefined;
+  const response = await fetch(signedUrl);
+  if (!response.ok) {
+    throw new Error(`connector content download failed with HTTP ${response.status}`);
+  }
+  return Buffer.from(await response.arrayBuffer());
+}
+
+async function readConnectorSnapshotContent(
+  repoPath: string,
+  value: unknown,
+): Promise<{ content: string | Buffer; bytes: number; binary?: boolean } | undefined> {
+  const normalizedPath = repoPath.toLowerCase();
+  if (isBinaryDesignAssetPath(normalizedPath)) {
+    const binaryContent = await readConnectorBinaryContent(value);
+    if (!binaryContent) return undefined;
+    if (binaryContent.length > MAX_CONTEXT_ASSET_BYTES) {
+      throw new Error(`binary asset exceeds ${MAX_CONTEXT_ASSET_BYTES} bytes`);
+    }
+    return { content: binaryContent, bytes: binaryContent.length, binary: true };
+  }
+  const textContent = await readConnectorTextContent(value);
+  if (textContent === undefined) return undefined;
+  const content = textContent.slice(0, MAX_CONTEXT_FILE_BYTES);
+  return { content, bytes: Buffer.byteLength(content, 'utf8') };
 }
 
 function extractTreePaths(value: unknown): string[] {
@@ -743,16 +821,17 @@ async function collectGithubEvidenceWithConnector(
         ref: resolvedRef,
         path: repoPath,
       });
-      const content = await readConnectorTextContent(contentPayload);
-      if (content === undefined) {
-        warnings.push(`Skipped ${repoPath}: connector returned no readable text content`);
+      const snapshot = await readConnectorSnapshotContent(repoPath, contentPayload);
+      if (snapshot === undefined) {
+        warnings.push(`Skipped ${repoPath}: connector returned no readable content`);
         continue;
       }
       files.push({
         repoPath,
-        content: content.slice(0, MAX_CONTEXT_FILE_BYTES),
-        bytes: Buffer.byteLength(content, 'utf8'),
+        content: snapshot.content,
+        bytes: snapshot.bytes,
         source: 'connector',
+        ...(snapshot.binary ? { binary: true } : {}),
       });
     } catch (error) {
       warnings.push(`Skipped ${repoPath}: ${error instanceof Error ? error.message : String(error)}`);
@@ -1121,7 +1200,8 @@ async function writeGithubDesignEvidence(outputPath: string, evidence: GithubDes
     }
     writtenFiles.push({ ...file, outputPath: path.relative(process.cwd(), fileOutputPath).split(path.sep).join('/') });
   }
-  const nextEvidence = { ...evidence, files: writtenFiles };
+  const materializedFiles = await materializePackageEvidenceArtifacts(writtenFiles);
+  const nextEvidence = { ...evidence, files: writtenFiles, materializedFiles };
   await ensureParentDirectory(resolvedOutputPath);
   await writeFile(resolvedOutputPath, renderGithubDesignEvidenceMarkdown(nextEvidence), 'utf8');
   return nextEvidence;
@@ -1143,10 +1223,97 @@ async function writeLocalDesignEvidence(outputPath: string, evidence: LocalDesig
     }
     writtenFiles.push({ ...file, outputPath: path.relative(process.cwd(), fileOutputPath).split(path.sep).join('/') });
   }
-  const nextEvidence = { ...evidence, files: writtenFiles };
+  const materializedFiles = await materializePackageEvidenceArtifacts(writtenFiles);
+  const nextEvidence = { ...evidence, files: writtenFiles, materializedFiles };
   await ensureParentDirectory(resolvedOutputPath);
   await writeFile(resolvedOutputPath, renderLocalDesignEvidenceMarkdown(nextEvidence), 'utf8');
   return nextEvidence;
+}
+
+async function materializePackageEvidenceArtifacts(files: GithubSnapshotFile[]): Promise<string[]> {
+  const materialized: string[] = [];
+  for (const file of packageBuildAssetCandidates(files)) {
+    const target = packageBuildAssetTarget(file.repoPath);
+    if (target === undefined) continue;
+    if (await writePackageFileIfMissing(target, file.content, file.binary === true)) {
+      materialized.push(target);
+    }
+  }
+  for (const file of packageSourceExampleCandidates(files)) {
+    const safeRelativePath = safeRepoRelativePath(file.repoPath);
+    if (!safeRelativePath) continue;
+    const target = path.join('source_examples', safeRelativePath).split(path.sep).join('/');
+    if (await writePackageFileIfMissing(target, file.content, false)) {
+      materialized.push(target);
+    }
+  }
+  return materialized;
+}
+
+function packageBuildAssetCandidates(files: GithubSnapshotFile[]): GithubSnapshotFile[] {
+  return files
+    .filter((file) => file.binary === true && packageBuildAssetTarget(file.repoPath) !== undefined)
+    .slice(0, 8);
+}
+
+function packageBuildAssetTarget(repoPath: string): string | undefined {
+  const safeRelativePath = safeRepoRelativePath(repoPath);
+  if (!safeRelativePath) return undefined;
+  if (!/\.(svg|png|jpe?g|webp|ico)$/iu.test(safeRelativePath)) return undefined;
+  if (!/(^|\/)[^/]*(logo|icon|tray|wordmark|mark)[^/]*\.(svg|png|jpe?g|webp|ico)$/iu.test(safeRelativePath)) return undefined;
+  const parts = safeRelativePath.split('/');
+  const buildIndex = parts.findIndex((part) => /^build$/iu.test(part));
+  const assetRootIndex = buildIndex === -1
+    ? parts.findIndex((part) => /^(resources|public-resources)$/iu.test(part))
+    : buildIndex;
+  if (assetRootIndex === -1 || assetRootIndex === parts.length - 1) return undefined;
+  return path.join('build', ...parts.slice(assetRootIndex + 1)).split(path.sep).join('/');
+}
+
+function packageSourceExampleCandidates(files: GithubSnapshotFile[]): GithubSnapshotFile[] {
+  const seen = new Set<string>();
+  const candidates = files
+    .filter((file) => !file.binary && typeof file.content === 'string')
+    .filter((file) => /\.(tsx|ts|jsx|js)$/iu.test(file.repoPath))
+    .filter((file) => {
+      const name = sourceComponentNameFromPath(file.repoPath);
+      if (name === undefined || !isSourceSurfaceComponentName(name)) return false;
+      const key = normalizeAnchorText(name);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((left, right) => sourceExamplePriority(right.repoPath) - sourceExamplePriority(left.repoPath));
+  return candidates.slice(0, 6);
+}
+
+function sourceExamplePriority(repoPath: string): number {
+  const category = designEvidenceInventoryCategory(repoPath);
+  if (category === 'App shell and navigation') return 4;
+  if (category === 'Chat and input surfaces') return 3;
+  if (category === 'Reusable components') return 2;
+  return 1;
+}
+
+async function writePackageFileIfMissing(relativePath: string, content: string | Buffer, binary: boolean): Promise<boolean> {
+  const safeRelativePath = safeRepoRelativePath(relativePath);
+  if (!safeRelativePath) return false;
+  const targetPath = path.resolve(process.cwd(), safeRelativePath);
+  const cwd = path.resolve(process.cwd());
+  if (targetPath !== cwd && !targetPath.startsWith(`${cwd}${path.sep}`)) return false;
+  try {
+    await stat(targetPath);
+    return false;
+  } catch (error) {
+    if (!isAbsenceError(error)) throw error;
+  }
+  await ensureParentDirectory(targetPath);
+  if (binary) {
+    await writeFile(targetPath, content);
+  } else {
+    await writeFile(targetPath, content, 'utf8');
+  }
+  return true;
 }
 
 function renderGithubDesignEvidenceMarkdown(evidence: GithubDesignEvidence): string {
@@ -1205,6 +1372,12 @@ function renderGithubDesignEvidenceMarkdown(evidence: GithubDesignEvidence): str
       }
     }
   }
+  if (evidence.materializedFiles && evidence.materializedFiles.length > 0) {
+    lines.push('', '## Package Files Materialized', '');
+    for (const file of evidence.materializedFiles) {
+      lines.push(`- \`${file}\``);
+    }
+  }
   lines.push(
     '',
     '## Next Design-System Work',
@@ -1213,6 +1386,7 @@ function renderGithubDesignEvidenceMarkdown(evidence: GithubDesignEvidence): str
     '- Convert the inventory above into a Claude Design-style package: `README.md`, `SKILL.md`, `colors_and_type.css`, `preview/colors-*`, `preview/typography-specimens.html`, `preview/spacing-*`, `preview/components-*`, `preview/brand-assets.html`, `ui_kits/app/`, and preserved `assets/`, `build/`, or `fonts/` when evidence exists.',
     '- `ui_kits/app/index.html` must be a browser-reviewable component entry: load `../../colors_and_type.css`, load or import at least three files from `ui_kits/app/components/`, and mount the composed UI through ReactDOM/Babel or compiled browser-ready JavaScript. Do not duplicate a static HTML mock when modular component files exist.',
     '- `ui_kits/app/components/App.jsx` (or equivalent app shell) must compose source-backed role components such as Sidebar, AssistantsList, ChatArea, InputBar, and MessageBubble, not merely list their filenames.',
+    ...UI_KIT_ENTRY_GUIDANCE,
     '- Preserve at least three high-signal source examples outside `context/` under `source_examples/` when reusable component snapshots exist, so future agents can compare generated components against original source structure.',
     '- When a captured asset path begins with `build/`, copy the snapshot back into a root `build/` path with its original filename, such as `context/.../files/build/icon.png` -> `build/icon.png`. Do not satisfy build/runtime icon evidence by only renaming those files into `assets/`.',
     '- Make `preview/brand-assets.html` visibly load preserved asset files from `assets/` or `build/`; do not redraw captured logos/icons as inline placeholders.',
@@ -1275,6 +1449,12 @@ function renderLocalDesignEvidenceMarkdown(evidence: LocalDesignEvidence): strin
       }
     }
   }
+  if (evidence.materializedFiles && evidence.materializedFiles.length > 0) {
+    lines.push('', '## Package Files Materialized', '');
+    for (const file of evidence.materializedFiles) {
+      lines.push(`- \`${file}\``);
+    }
+  }
   lines.push(
     '',
     '## Next Design-System Work',
@@ -1283,6 +1463,7 @@ function renderLocalDesignEvidenceMarkdown(evidence: LocalDesignEvidence): strin
     '- Convert the inventory above into a Claude Design-style package: `README.md`, `SKILL.md`, `colors_and_type.css`, `preview/colors-*`, `preview/typography-specimens.html`, `preview/spacing-*`, `preview/components-*`, `preview/brand-assets.html`, `ui_kits/app/`, and preserved `assets/`, `build/`, or `fonts/` when evidence exists.',
     '- `ui_kits/app/index.html` must be a browser-reviewable component entry: load `../../colors_and_type.css`, load or import at least three files from `ui_kits/app/components/`, and mount the composed UI through ReactDOM/Babel or compiled browser-ready JavaScript. Do not duplicate a static HTML mock when modular component files exist.',
     '- `ui_kits/app/components/App.jsx` (or equivalent app shell) must compose source-backed role components such as Sidebar, AssistantsList, ChatArea, InputBar, and MessageBubble, not merely list their filenames.',
+    ...UI_KIT_ENTRY_GUIDANCE,
     '- Preserve at least three high-signal source examples outside `context/` under `source_examples/` when reusable component snapshots exist, so future agents can compare generated components against original source structure.',
     '- When a captured asset path begins with `build/`, copy the snapshot back into a root `build/` path with its original filename, such as `context/.../files/build/icon.png` -> `build/icon.png`. Do not satisfy build/runtime icon evidence by only renaming those files into `assets/`.',
     '- Make `preview/brand-assets.html` visibly load preserved asset files from `assets/` or `build/`; do not redraw captured logos/icons as inline placeholders.',
@@ -1438,6 +1619,7 @@ async function runGithubDesignContext(options: ParsedOptions): Promise<ToolCliRe
     ...(written.localCloneMethod === undefined ? {} : { localCloneMethod: written.localCloneMethod }),
     outputPath: path.relative(process.cwd(), path.resolve(outputPath)).split(path.sep).join('/'),
     snapshotFiles: written.files.map((file) => file.outputPath).filter(Boolean),
+    materializedFiles: written.materializedFiles ?? [],
     warnings: written.warnings,
   });
   return { exitCode: 0 };
@@ -1455,6 +1637,7 @@ async function runLocalDesignContext(options: ParsedOptions): Promise<ToolCliRes
     method: written.method,
     outputPath: path.relative(process.cwd(), path.resolve(outputPath)).split(path.sep).join('/'),
     snapshotFiles: written.files.map((file) => file.outputPath).filter(Boolean),
+    materializedFiles: written.materializedFiles ?? [],
     warnings: written.warnings,
   });
   return { exitCode: 0 };
