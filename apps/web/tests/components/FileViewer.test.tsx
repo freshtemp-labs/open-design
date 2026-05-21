@@ -76,6 +76,24 @@ function srcDocActivationMessages(calls: readonly (readonly unknown[])[]) {
     });
 }
 
+function openManualTools() {
+  fireEvent.click(screen.getByRole('button', { name: 'Manual' }));
+}
+
+function openAgentTools() {
+  fireEvent.click(screen.getByRole('button', { name: 'Ask agent' }));
+}
+
+function clickManualTool(testId: string) {
+  openManualTools();
+  fireEvent.click(screen.getByTestId(testId));
+}
+
+function clickAgentTool(testId: string) {
+  openAgentTools();
+  fireEvent.click(screen.getByTestId(testId));
+}
+
 describe('FileViewer preview scale', () => {
   it('uses the requested zoom for desktop preview overlays', () => {
     expect(effectivePreviewScale('desktop', 1.5, { width: 320, height: 480 })).toBe(1.5);
@@ -411,7 +429,7 @@ describe('FileViewer SVG artifacts', () => {
     expect(srcDocFrame?.srcdoc).not.toContain('__odArtifactBootCount');
 
     const postMessageSpy = vi.spyOn(srcDocFrame!.contentWindow!, 'postMessage');
-    fireEvent.click(screen.getByTestId('inspect-mode-toggle'));
+    clickManualTool('inspect-mode-toggle');
 
     const urlFrameAfter = container.querySelector('iframe[data-od-render-mode="url-load"]') as HTMLIFrameElement | null;
     const srcDocFrameAfter = container.querySelector('iframe[data-od-render-mode="srcdoc"]') as HTMLIFrameElement | null;
@@ -637,17 +655,18 @@ describe('FileViewer SVG artifacts', () => {
     );
 
     expect(container.querySelector('.deck-nav')).toBeTruthy();
-    expect(container.querySelector('.palette-tweaks-anchor')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Manual' })).toBeTruthy();
     expect(container.querySelector('.viewer-viewport-switcher')).toBeTruthy();
+    openManualTools();
+    expect(screen.getByTestId('palette-tweaks-toggle')).toBeTruthy();
 
-    fireEvent.click(container.querySelector('.viewer-mode-trigger')!);
-    fireEvent.click(screen.getByRole('menuitem', { name: /code/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Code' }));
 
     await waitFor(() => {
       expect(container.querySelector('.deck-nav')).toBeNull();
-      expect(container.querySelector('.palette-tweaks-anchor')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Manual' })).toBeNull();
       expect(container.querySelector('.viewer-viewport-switcher')).toBeNull();
-      expect(screen.getByTestId('manual-edit-mode-toggle')).toBeTruthy();
+      expect(screen.queryByTestId('manual-edit-mode-toggle')).toBeNull();
       expect(screen.queryByTestId('draw-overlay-toggle')).toBeNull();
       expect(screen.queryByTestId('palette-tweaks-toggle')).toBeNull();
       expect(screen.queryByRole('button', { name: /100%/ })).toBeNull();
@@ -1299,9 +1318,11 @@ describe('FileViewer tweaks toolbar', () => {
       />,
     );
 
+    openManualTools();
     expect(screen.getByTestId('palette-tweaks-toggle')).toBeTruthy();
-    expect(screen.getByTestId('board-mode-toggle')).toBeTruthy();
     expect(screen.getByTestId('inspect-mode-toggle')).toBeTruthy();
+    openAgentTools();
+    expect(screen.getByTestId('board-mode-toggle')).toBeTruthy();
     expect(screen.getByTestId('draw-overlay-toggle')).toBeTruthy();
     expect(screen.queryByPlaceholderText('Type anywhere to add a note')).toBeNull();
     expect(screen.queryByTestId('comment-mode-toggle')).toBeNull();
@@ -1311,7 +1332,7 @@ describe('FileViewer tweaks toolbar', () => {
     expect(screen.getByPlaceholderText('Type anywhere to add a note')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Click' })).toBeTruthy();
 
-    fireEvent.click(screen.getByTestId('draw-overlay-toggle'));
+    clickAgentTool('draw-overlay-toggle');
     expect(screen.queryByPlaceholderText('Type anywhere to add a note')).toBeNull();
   });
 
@@ -1323,7 +1344,7 @@ describe('FileViewer tweaks toolbar', () => {
     );
 
     const frame = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
-    fireEvent.click(screen.getByTestId('inspect-mode-toggle'));
+    clickManualTool('inspect-mode-toggle');
 
     window.dispatchEvent(new MessageEvent('message', {
       source: frame.contentWindow,
@@ -1353,16 +1374,15 @@ describe('FileViewer tweaks toolbar', () => {
       />,
     );
 
-    fireEvent.click(screen.getByTestId('draw-overlay-toggle'));
+    clickAgentTool('draw-overlay-toggle');
     const note = screen.getByPlaceholderText('Type anywhere to add a note');
     fireEvent.change(note, { target: { value: 'mark this' } });
     fireEvent.click(screen.getByRole('button', { name: 'Queue' }));
 
     expect(screen.getByPlaceholderText('Type anywhere to add a note')).toBeTruthy();
-    expect(screen.getAllByRole('button', { name: 'Draw' })[1]?.getAttribute('aria-pressed')).toBe('true');
     expect(screen.getByRole('button', { name: 'Click' }).getAttribute('aria-pressed')).toBe('false');
 
-    fireEvent.click(screen.getByTestId('draw-overlay-toggle'));
+    clickAgentTool('draw-overlay-toggle');
     expect(screen.queryByPlaceholderText('Type anywhere to add a note')).toBeNull();
   });
 
@@ -1376,7 +1396,7 @@ describe('FileViewer tweaks toolbar', () => {
     expect((screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement).getAttribute('data-od-render-mode')).toBe('url-load');
     const inactiveSrcDocFrame = screen.getByTestId('artifact-preview-frame-srcdoc') as HTMLIFrameElement;
     const postMessageSpy = vi.spyOn(inactiveSrcDocFrame.contentWindow!, 'postMessage');
-    fireEvent.click(screen.getByTestId('draw-overlay-toggle'));
+    clickAgentTool('draw-overlay-toggle');
 
     const frame = await waitFor(() => {
       const activeFrame = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
@@ -1403,7 +1423,7 @@ describe('FileViewer tweaks toolbar', () => {
       />,
     );
 
-    fireEvent.click(screen.getByTestId('draw-overlay-toggle'));
+    clickAgentTool('draw-overlay-toggle');
     fireEvent.change(screen.getByPlaceholderText('Type anywhere to add a note'), {
       target: { value: 'mark this' },
     });
@@ -1442,7 +1462,7 @@ describe('FileViewer tweaks toolbar', () => {
       />,
     );
 
-    fireEvent.click(screen.getByTestId('board-mode-toggle'));
+    clickAgentTool('board-mode-toggle');
 
     expect(screen.getByTestId('comment-side-panel')).toBeTruthy();
     expect(screen.queryByTestId('comment-saved-marker-pin-applying')).toBeNull();
@@ -1459,7 +1479,7 @@ describe('FileViewer tweaks toolbar', () => {
       />,
     );
 
-    fireEvent.click(screen.getByTestId('board-mode-toggle'));
+    clickAgentTool('board-mode-toggle');
 
     expect(screen.getByTestId('comment-side-panel')).toBeTruthy();
     expect(screen.getByTestId('inspect-empty-hint-container').className).toContain(
@@ -1516,7 +1536,7 @@ describe('FileViewer tweaks toolbar', () => {
       />,
     );
 
-    fireEvent.click(screen.getByTestId('board-mode-toggle'));
+    clickAgentTool('board-mode-toggle');
 
     expect(screen.getAllByTestId('comment-side-item')[0]?.textContent).toContain('Newer comment');
     expect(screen.getByTestId('comment-saved-marker-pin-newer').textContent).toContain('1');
@@ -1552,7 +1572,7 @@ describe('FileViewer tweaks toolbar', () => {
     );
 
     const frame = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
-    fireEvent.click(screen.getByTestId('board-mode-toggle'));
+    clickAgentTool('board-mode-toggle');
 
     window.dispatchEvent(new MessageEvent('message', {
       source: frame.contentWindow,
@@ -1601,7 +1621,7 @@ describe('FileViewer tweaks toolbar', () => {
       />,
     );
 
-    fireEvent.click(screen.getByTestId('board-mode-toggle'));
+    clickAgentTool('board-mode-toggle');
     fireEvent.click(screen.getByRole('button', { name: 'Open comment for pin-transition' }));
 
     expect((await screen.findByTestId('comment-popover-input') as HTMLTextAreaElement).value)
@@ -2490,7 +2510,7 @@ describe('LiveArtifactViewer', () => {
       expect(container.querySelector('.ghost-link')?.getAttribute('tabindex')).toBe('-1');
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /preview/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
 
     await waitFor(() => {
       expect(screen.getByRole('link', { name: /^open$/i }).getAttribute('tabindex')).not.toBe('-1');
