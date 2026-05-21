@@ -41,6 +41,7 @@ export function AvatarMenu({
   const t = useT();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -49,7 +50,10 @@ export function AvatarMenu({
       if (!wrapRef.current.contains(e.target as Node)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
     };
     document.addEventListener('mousedown', onClick);
     document.addEventListener('keydown', onKey);
@@ -82,18 +86,24 @@ export function AvatarMenu({
   return (
     <div className="avatar-menu" ref={wrapRef}>
       <button
+        ref={triggerRef}
         type="button"
-        className="settings-icon-btn"
+        className="avatar-agent-trigger"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
         title={t('avatar.title')}
         aria-label={t('avatar.title')}
       >
-        <Icon name="settings" size={17} />
+        {currentAgent ? (
+          <AgentIcon id={currentAgent.id} size={18} />
+        ) : (
+          <Icon name="link" size={16} />
+        )}
+        <Icon name="chevron-down" size={10} />
       </button>
       {open ? (
-        <div className="avatar-popover" role="menu">
+        <div className="avatar-popover" role="dialog" aria-label={t('avatar.title')}>
           <div className="avatar-popover-head">
             <span className="who">
               {config.mode === 'daemon'
@@ -111,8 +121,16 @@ export function AvatarMenu({
 
           <button
             type="button"
-            className="avatar-item"
+            className={`avatar-item${config.mode === 'daemon' ? ' active' : ''}`}
+            aria-current={config.mode === 'daemon' ? 'true' : undefined}
             onClick={() => {
+              if (config.mode === 'daemon') {
+                setOpen(false);
+                if (!daemonLive) {
+                  onOpenSettings();
+                }
+                return;
+              }
               onModeChange('daemon');
               if (!daemonLive) {
                 // No daemon — let user know via settings page rather than
@@ -132,10 +150,14 @@ export function AvatarMenu({
             ) : !daemonLive ? (
               <span className="avatar-item-meta">{t('avatar.metaOffline')}</span>
             ) : null}
+            {config.mode === 'daemon' ? (
+              <Icon name="check" size={13} className="avatar-item-check" />
+            ) : null}
           </button>
           <button
             type="button"
-            className="avatar-item"
+            className={`avatar-item${config.mode === 'api' ? ' active' : ''}`}
+            aria-current={config.mode === 'api' ? 'true' : undefined}
             onClick={() => onModeChange('api')}
           >
             <span className="avatar-item-icon" aria-hidden>
@@ -145,33 +167,43 @@ export function AvatarMenu({
             {config.mode === 'api' ? (
               <span className="avatar-item-meta">{t('avatar.metaActive')}</span>
             ) : null}
+            {config.mode === 'api' ? (
+              <Icon name="check" size={13} className="avatar-item-check" />
+            ) : null}
           </button>
 
           {config.mode === 'daemon' && installedAgents.length > 0 ? (
             <>
               <div className="avatar-section-label">{t('avatar.codeAgent')}</div>
-              {installedAgents.map((a) => (
-                <button
-                  type="button"
-                  key={a.id}
-                  className="avatar-item"
-                  onClick={() => {
-                    onAgentChange(a.id);
-                    // Keep the popover open so the user can immediately
-                    // pick a model for the agent they just chose.
-                  }}
-                >
-                  <AgentIcon id={a.id} size={18} />
-                  <span>{a.name}</span>
-                  {config.agentId === a.id ? (
-                    <span className="avatar-item-meta">
-                      {t('avatar.metaSelected')}
-                    </span>
-                  ) : a.version ? (
-                    <span className="avatar-item-meta">{a.version}</span>
-                  ) : null}
-                </button>
-              ))}
+              {installedAgents.map((a) => {
+                const selected = config.agentId === a.id;
+                return (
+                  <button
+                    type="button"
+                    key={a.id}
+                    className={`avatar-item${selected ? ' active' : ''}`}
+                    aria-current={selected ? 'true' : undefined}
+                    onClick={() => {
+                      onAgentChange(a.id);
+                      // Keep the popover open so the user can immediately
+                      // pick a model for the agent they just chose.
+                    }}
+                  >
+                    <AgentIcon id={a.id} size={18} />
+                    <span>{a.name}</span>
+                    {selected ? (
+                      <span className="avatar-item-meta">
+                        {t('avatar.metaSelected')}
+                      </span>
+                    ) : a.version ? (
+                      <span className="avatar-item-meta">{a.version}</span>
+                    ) : null}
+                    {selected ? (
+                      <Icon name="check" size={13} className="avatar-item-check" />
+                    ) : null}
+                  </button>
+                );
+              })}
               {currentAgent &&
               currentAgent.available &&
               ((currentAgent.models && currentAgent.models.length > 0) ||

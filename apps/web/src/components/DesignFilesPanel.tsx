@@ -66,6 +66,7 @@ const MODIFIED_SECTION_LABEL_KEY: Record<ModifiedSection, keyof Dict> = {
   previous30Days: 'designFiles.modifiedPrevious30Days',
   older: 'designFiles.modifiedOlder',
 };
+const DIRECT_OPEN_FILE_KINDS = new Set<ProjectFileKind>(['html', 'image', 'sketch']);
 
 /**
  * Full-panel browser for a project's `.od/projects/<id>/` folder. Mirrors
@@ -403,6 +404,15 @@ export function DesignFilesPanel({
     setRenaming({ name, draft: name, saving: false });
   }
 
+  function openOrPreviewFile(file: ProjectFile) {
+    if (DIRECT_OPEN_FILE_KINDS.has(file.kind)) {
+      setPreview(null);
+      onOpenFile(file.name);
+      return;
+    }
+    setPreview(file.name);
+  }
+
   async function commitRename(name: string, draft: string) {
     const nextName = draft.trim();
     if (!nextName || nextName === name) {
@@ -491,7 +501,7 @@ export function DesignFilesPanel({
         </td>
         <td
           className="df-cell-icon df-cell-openable"
-          onClick={() => setPreview(f.name)}
+          onClick={() => openOrPreviewFile(f)}
           onDoubleClick={() => onOpenFile(f.name)}
         >
           <span className="df-row-icon" data-kind={f.kind} aria-hidden>
@@ -501,7 +511,7 @@ export function DesignFilesPanel({
         <td
           className="df-cell-name df-cell-openable"
           onClick={() => {
-            if (!renameState) setPreview(f.name);
+            if (!renameState) openOrPreviewFile(f);
           }}
           onDoubleClick={() => {
             if (!renameState) onOpenFile(f.name);
@@ -536,18 +546,27 @@ export function DesignFilesPanel({
             <button
               type="button"
               className="df-row-name-btn"
-              onClick={() => setPreview(f.name)}
+              onClick={(e) => {
+                e.stopPropagation();
+                openOrPreviewFile(f);
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
-                  const now = Date.now();
-                  const last = lastKeyPress.current.get(f.name) ?? 0;
-                  if (now - last < 300) {
+                  e.stopPropagation();
+                  if (DIRECT_OPEN_FILE_KINDS.has(f.kind)) {
                     lastKeyPress.current.delete(f.name);
-                    onOpenFile(f.name);
+                    openOrPreviewFile(f);
                   } else {
-                    lastKeyPress.current.set(f.name, now);
-                    setPreview(f.name);
+                    const now = Date.now();
+                    const last = lastKeyPress.current.get(f.name) ?? 0;
+                    if (now - last < 300) {
+                      lastKeyPress.current.delete(f.name);
+                      onOpenFile(f.name);
+                    } else {
+                      lastKeyPress.current.set(f.name, now);
+                      setPreview(f.name);
+                    }
                   }
                 }
               }}
@@ -561,14 +580,14 @@ export function DesignFilesPanel({
         </td>
         <td
           className="df-cell-kind df-cell-openable"
-          onClick={() => setPreview(f.name)}
+          onClick={() => openOrPreviewFile(f)}
           onDoubleClick={() => onOpenFile(f.name)}
         >
           <span className="df-kind-label">{kindLabel(f.kind, t)}</span>
         </td>
         <td
           className="df-cell-time df-cell-openable"
-          onClick={() => setPreview(f.name)}
+          onClick={() => openOrPreviewFile(f)}
           onDoubleClick={() => onOpenFile(f.name)}
         >
           {relativeTime(f.mtime, t)}
@@ -883,6 +902,7 @@ export function DesignFilesPanel({
         ) : null}
       </div>
     ) : null;
+  const isEmpty = files.length === 0 && liveArtifacts.length === 0;
 
   return (
     <div className={`df-panel ${preview ? '' : 'no-preview'}`}>
@@ -908,12 +928,34 @@ export function DesignFilesPanel({
             {kindFilterControl}
             {fileActions}
           </div>
-          {files.length === 0 && liveArtifacts.length === 0 ? (
+          {isEmpty ? (
             <div className="df-empty" data-testid="design-files-empty">
-              <div className="df-empty-pill">
+              <div
+                className={`df-empty-pill${draggingFiles ? ' dragging' : ''}`}
+                onDragEnter={(ev) => {
+                  ev.preventDefault();
+                  dragDepthRef.current += 1;
+                  setDraggingFiles(true);
+                }}
+                onDragOver={(ev) => {
+                  ev.preventDefault();
+                  ev.dataTransfer.dropEffect = 'copy';
+                }}
+                onDragLeave={(ev) => {
+                  if (!ev.currentTarget.contains(ev.relatedTarget as Node | null)) {
+                    dragDepthRef.current = 0;
+                    setDraggingFiles(false);
+                    return;
+                  }
+                  dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+                  if (dragDepthRef.current === 0) setDraggingFiles(false);
+                }}
+                onDrop={handleDrop}
+              >
                 <span className="df-empty-title">
                   {t('designFiles.empty')}
                 </span>
+                <span className="df-empty-desc">{t('designFiles.dropDesc')}</span>
                 <button
                   type="button"
                   className="df-empty-cta"
@@ -1174,31 +1216,33 @@ export function DesignFilesPanel({
               ) : null}
             </>
           )}
-          <div
-            className={`df-drop ${draggingFiles ? 'dragging' : ''}`}
-            onDragEnter={(ev) => {
-              ev.preventDefault();
-              dragDepthRef.current += 1;
-              setDraggingFiles(true);
-            }}
-            onDragOver={(ev) => {
-              ev.preventDefault();
-              ev.dataTransfer.dropEffect = 'copy';
-            }}
-            onDragLeave={(ev) => {
-              if (!ev.currentTarget.contains(ev.relatedTarget as Node | null)) {
-                dragDepthRef.current = 0;
-                setDraggingFiles(false);
-                return;
-              }
-              dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
-              if (dragDepthRef.current === 0) setDraggingFiles(false);
-            }}
-            onDrop={handleDrop}
-          >
-            <span className="label">{t('designFiles.dropTitle')}</span>
-            <span className="desc">{t('designFiles.dropDesc')}</span>
-          </div>
+          {!isEmpty ? (
+            <div
+              className={`df-drop ${draggingFiles ? 'dragging' : ''}`}
+              onDragEnter={(ev) => {
+                ev.preventDefault();
+                dragDepthRef.current += 1;
+                setDraggingFiles(true);
+              }}
+              onDragOver={(ev) => {
+                ev.preventDefault();
+                ev.dataTransfer.dropEffect = 'copy';
+              }}
+              onDragLeave={(ev) => {
+                if (!ev.currentTarget.contains(ev.relatedTarget as Node | null)) {
+                  dragDepthRef.current = 0;
+                  setDraggingFiles(false);
+                  return;
+                }
+                dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+                if (dragDepthRef.current === 0) setDraggingFiles(false);
+              }}
+              onDrop={handleDrop}
+            >
+              <span className="label">{t('designFiles.dropTitle')}</span>
+              <span className="desc">{t('designFiles.dropDesc')}</span>
+            </div>
+          ) : null}
         </div>
       </div>
       {preview && previewFile ? (

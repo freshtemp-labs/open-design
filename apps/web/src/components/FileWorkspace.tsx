@@ -62,6 +62,7 @@ import {
 
 interface Props {
   projectId: string;
+  projectTitle?: string;
   projectKind: TrackingProjectKind;
   files: ProjectFile[];
   liveArtifacts: LiveArtifactSummary[];
@@ -187,6 +188,7 @@ const DESIGN_SYSTEM_IMAGE_OR_FONT_EXTENSIONS = /\.(svg|png|jpe?g|gif|webp|avif|i
 
 export function FileWorkspace({
   projectId,
+  projectTitle,
   projectKind,
   files,
   liveArtifacts,
@@ -791,6 +793,19 @@ export function FileWorkspace({
     }
     return [...persistedTabs, ...extras];
   }, [persistedTabs, sketches]);
+  const singleTabName = tabNames.length === 1 ? tabNames[0] : null;
+  const singleTabLabel = singleTabName
+    ? liveArtifactEntries.find((entry) => entry.tabId === singleTabName)?.title ?? singleTabName
+    : null;
+  const normalizedSingleTabLabel = singleTabLabel?.trim().toLocaleLowerCase();
+  const normalizedProjectTitle = projectTitle?.trim().toLocaleLowerCase();
+  const hideSingleFileTab =
+    singleTabName !== null &&
+    activeTab === singleTabName &&
+    !designSystemProject &&
+    normalizedSingleTabLabel !== undefined &&
+    normalizedSingleTabLabel.length > 0 &&
+    normalizedSingleTabLabel === normalizedProjectTitle;
 
   const isActiveSketch = activeFile?.kind === 'sketch' && isSketchName(activeFile.name);
   const activeSketch = activeFile && isActiveSketch ? sketches[activeFile.name] : null;
@@ -864,6 +879,7 @@ export function FileWorkspace({
             <span className="ws-tab-label">{t('workspace.designFiles')}</span>
           </button>
           {tabNames.map((name) => {
+            if (hideSingleFileTab) return null;
             const sketchEntry = sketches[name];
             const dirtyMark =
               sketchEntry && (sketchEntry.dirty || !sketchEntry.persisted) ? ' •' : '';

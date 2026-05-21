@@ -14,6 +14,17 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+function openManualTools() {
+  if (!screen.queryByRole('menu', { name: 'Manual tools' })) {
+    fireEvent.click(screen.getByRole('button', { name: 'Manual' }));
+  }
+}
+
+function clickManualTool(testId: string) {
+  openManualTools();
+  fireEvent.click(screen.getByTestId(testId));
+}
+
 describe('FileViewer manual edit regressions', () => {
   it('removes invalid fields from pending manual edit style saves without dropping unrelated fields', () => {
     expect(cancelManualEditPendingStyleSnapshot({
@@ -66,7 +77,7 @@ describe('FileViewer manual edit regressions', () => {
         />,
       );
 
-      fireEvent.click(screen.getByTestId('manual-edit-mode-toggle'));
+      clickManualTool('manual-edit-mode-toggle');
       const baseSizeInput = Array.from(document.querySelectorAll('.cc-row'))
         .find((row) => row.textContent?.includes('Base size'))
         ?.querySelector('input') as HTMLInputElement | null;
@@ -115,7 +126,7 @@ describe('FileViewer manual edit regressions', () => {
       const { rerender } = render(<FileViewer projectId="project-1" projectKind="prototype" file={first} />);
 
       await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/projects/project-1/raw/preview.html', {}));
-      fireEvent.click(screen.getByTestId('manual-edit-mode-toggle'));
+      clickManualTool('manual-edit-mode-toggle');
       const baseSizeInput = await waitFor(() => {
         const input = Array.from(document.querySelectorAll('.cc-row'))
           .find((row) => row.textContent?.includes('Base size'))
@@ -126,7 +137,7 @@ describe('FileViewer manual edit regressions', () => {
       fireEvent.change(baseSizeInput, { target: { value: '18' } });
 
       rerender(<FileViewer projectId="project-1" projectKind="prototype" file={second} />);
-      fireEvent.click(screen.getByTestId('manual-edit-mode-toggle'));
+      clickManualTool('manual-edit-mode-toggle');
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 1100));
       });

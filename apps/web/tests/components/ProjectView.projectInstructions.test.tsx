@@ -21,7 +21,7 @@ import {
   loadTabs,
   patchProject,
 } from '../../src/state/projects';
-import { fetchPreviewComments } from '../../src/providers/registry';
+import { fetchPreviewComments, openFolderDialog } from '../../src/providers/registry';
 
 vi.mock('../../src/i18n', () => ({
   useT: () => (key: string) => key,
@@ -60,6 +60,7 @@ vi.mock('../../src/providers/registry', async () => {
     fetchProjectFiles: vi.fn().mockResolvedValue([]),
     fetchSkill: vi.fn(),
     getTemplate: vi.fn(),
+    openFolderDialog: vi.fn(),
     patchPreviewCommentStatus: vi.fn(),
     upsertPreviewComment: vi.fn(),
     writeProjectTextFile: vi.fn(),
@@ -84,7 +85,12 @@ vi.mock('../../src/state/projects', async () => {
 });
 
 vi.mock('../../src/components/AppChromeHeader', () => ({
-  AppChromeHeader: ({ children }: { children: ReactNode }) => <header>{children}</header>,
+  AppChromeHeader: ({ children, actions }: { children: ReactNode; actions?: ReactNode }) => (
+    <header>
+      {children}
+      {actions}
+    </header>
+  ),
 }));
 
 vi.mock('../../src/components/AvatarMenu', () => ({
@@ -108,6 +114,7 @@ const mockedCreateConversation = vi.mocked(createConversation);
 const mockedListMessages = vi.mocked(listMessages);
 const mockedLoadTabs = vi.mocked(loadTabs);
 const mockedFetchPreviewComments = vi.mocked(fetchPreviewComments);
+const mockedOpenFolderDialog = vi.mocked(openFolderDialog);
 const mockedPatchProject = vi.mocked(patchProject);
 
 const config: AppConfig = {
@@ -159,6 +166,7 @@ function ProjectViewHarness({ initialProject }: { initialProject: Project }) {
       onTouchProject={vi.fn()}
       onProjectChange={setProject}
       onProjectsRefresh={vi.fn()}
+      onDeleteProject={vi.fn()}
     />
   );
 }
@@ -172,6 +180,7 @@ describe('ProjectView – saved Project instructions surface (#1822)', () => {
     mockedListMessages.mockResolvedValue([]);
     mockedLoadTabs.mockResolvedValue({ tabs: ['index.html'], active: 'index.html' });
     mockedFetchPreviewComments.mockResolvedValue([]);
+    mockedOpenFolderDialog.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -214,13 +223,15 @@ describe('ProjectView – saved Project instructions surface (#1822)', () => {
     expect(textarea.value).toBe(SAVED);
   });
 
-  it('offers an add affordance and opens an empty editor when no instructions are saved', async () => {
+  it('keeps empty project context actions inside the project settings menu', async () => {
     render(<ProjectViewHarness initialProject={baseProject} />);
 
-    const add = await screen.findByTestId('project-instructions-add');
     expect(screen.queryByTestId('project-instructions-chip')).toBeNull();
+    expect(screen.queryByTestId('project-instructions-add')).toBeNull();
+    expect(screen.queryByTestId('project-link-folder')).toBeNull();
 
-    fireEvent.click(add);
+    fireEvent.click(await screen.findByTestId('project-settings-trigger'));
+    fireEvent.click(screen.getByTestId('project-settings-instructions'));
 
     const textarea = screen.getByTestId('project-instructions-textarea') as HTMLTextAreaElement;
     expect(textarea.value).toBe('');
@@ -230,7 +241,8 @@ describe('ProjectView – saved Project instructions surface (#1822)', () => {
     mockedPatchProject.mockResolvedValue({ ...baseProject, customInstructions: SAVED });
     render(<ProjectViewHarness initialProject={baseProject} />);
 
-    fireEvent.click(await screen.findByTestId('project-instructions-add'));
+    fireEvent.click(await screen.findByTestId('project-settings-trigger'));
+    fireEvent.click(screen.getByTestId('project-settings-instructions'));
     fireEvent.change(screen.getByTestId('project-instructions-textarea'), {
       target: { value: SAVED },
     });
@@ -242,5 +254,43 @@ describe('ProjectView – saved Project instructions surface (#1822)', () => {
       expect(screen.getByTestId('project-instructions-preview').textContent).toBe(SAVED);
     });
     expect(screen.getByTestId('project-instructions-chip')).toBeTruthy();
+  });
+
+  it('does not show a linked folder chip when link persistence fails', async () => {
+    mockedOpenFolderDialog.mockResolvedValue('/Users/me/work/app');
+    mockedPatchProject.mockResolvedValue(null);
+    render(<ProjectViewHarness initialProject={{ ...baseProject, metadata: { kind: 'prototype' } }} />);
+
+    fireEvent.click(await screen.findByTestId('project-settings-trigger'));
+    fireEvent.click(screen.getByTestId('project-settings-link-folder'));
+
+    await waitFor(() => {
+      expect(mockedPatchProject).toHaveBeenCalledWith('project-1', {
+        metadata: { kind: 'prototype', linkedDirs: ['/Users/me/work/app'] },
+      });
+    });
+    expect(screen.queryByTestId('project-linked-dirs')).toBeNull();
+  });
+
+  it('keeps a linked folder chip visible when unlink persistence fails', async () => {
+    mockedPatchProject.mockResolvedValue(null);
+    render(
+      <ProjectViewHarness
+        initialProject={{
+          ...baseProject,
+          metadata: { kind: 'prototype', linkedDirs: ['/Users/me/work/app'] },
+        }}
+      />,
+    );
+
+    expect(await screen.findByText('app')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'chat.linkedFolderRemoveAria' }));
+
+    await waitFor(() => {
+      expect(mockedPatchProject).toHaveBeenCalledWith('project-1', {
+        metadata: { kind: 'prototype', linkedDirs: [] },
+      });
+    });
+    expect(screen.getByText('app')).toBeTruthy();
   });
 });

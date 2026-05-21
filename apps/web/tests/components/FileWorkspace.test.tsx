@@ -160,7 +160,7 @@ describe('FileWorkspace upload input', () => {
       <FileWorkspace
         projectId="project-1"
         projectKind="prototype"
-        files={[baseFile()]}
+        files={[baseFile({ name: 'mock.txt', path: 'mock.txt', kind: 'text', mime: 'text/plain' })]}
         liveArtifacts={[]}
         onRefreshFiles={vi.fn()}
         isDeck={false}
@@ -170,7 +170,7 @@ describe('FileWorkspace upload input', () => {
     );
 
     fireEvent.change(screen.getByTestId('design-files-upload-input'), {
-      target: { files: [new File(['mock'], 'mock.png', { type: 'image/png' })] },
+      target: { files: [new File(['mock'], 'mock.txt', { type: 'text/plain' })] },
     });
 
     await waitFor(() => {
@@ -179,7 +179,7 @@ describe('FileWorkspace upload input', () => {
       );
     });
 
-    const row = screen.getByTestId('design-file-row-mock.png');
+    const row = screen.getByTestId('design-file-row-mock.txt');
     const nameButton = row.querySelector<HTMLButtonElement>('.df-row-name-btn');
     if (!nameButton) throw new Error('Could not find file name button');
     fireEvent.click(nameButton);
@@ -306,6 +306,44 @@ describe('FileWorkspace upload input', () => {
     );
 
     expect(markup).toContain('Show chat');
+  });
+});
+
+describe('FileWorkspace tab chrome', () => {
+  it('keeps the sole file tab visible when it does not duplicate the project title', () => {
+    render(
+      <FileWorkspace
+        projectId="project-1"
+        projectTitle="Landing Page"
+        projectKind="prototype"
+        files={[workspaceFile('index.html')]}
+        liveArtifacts={[]}
+        onRefreshFiles={vi.fn()}
+        isDeck={false}
+        tabsState={{ tabs: ['index.html'], active: 'index.html' }}
+        onTabsStateChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('tab', { name: /index\.html/i })).toBeTruthy();
+  });
+
+  it('hides the sole file tab only when it duplicates the project title', () => {
+    render(
+      <FileWorkspace
+        projectId="project-1"
+        projectTitle="index.html"
+        projectKind="prototype"
+        files={[workspaceFile('index.html')]}
+        liveArtifacts={[]}
+        onRefreshFiles={vi.fn()}
+        isDeck={false}
+        tabsState={{ tabs: ['index.html'], active: 'index.html' }}
+        onTabsStateChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('tab', { name: /index\.html/i })).toBeNull();
   });
 });
 
