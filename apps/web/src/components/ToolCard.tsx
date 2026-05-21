@@ -380,7 +380,19 @@ function AskUserQuestionCard({
   );
 }
 
-export function TodoCard({ input, runStreaming, runSucceeded, onDismiss }: { input: unknown; runStreaming: boolean; runSucceeded: boolean; onDismiss?: () => void }) {
+export function TodoCard({
+  input,
+  runStreaming,
+  runSucceeded,
+  onDismiss,
+  compactWhenLarge = false,
+}: {
+  input: unknown;
+  runStreaming: boolean;
+  runSucceeded: boolean;
+  onDismiss?: () => void;
+  compactWhenLarge?: boolean;
+}) {
   const t = useT();
   const todos = parseTodoWriteInput(input);
   // Mirror the pattern other agent UIs (Cursor, Codex) use: default the
@@ -390,7 +402,9 @@ export function TodoCard({ input, runStreaming, runSucceeded, onDismiss }: { inp
   // override sticks for the lifetime of this card.
   const hasInProgress = todos.some((todo) => todo.status === 'in_progress');
   const hasPending = todos.some((todo) => todo.status === 'pending' || todo.status === 'in_progress');
-  const defaultExpanded = todos.length > 0 && (hasInProgress || hasPending || runStreaming);
+  const defaultExpanded = todos.length > 0
+    && (hasInProgress || hasPending || runStreaming)
+    && !(compactWhenLarge && todos.length > 6);
   const [overrideExpanded, setOverrideExpanded] = useState<boolean | null>(null);
   const expanded = overrideExpanded ?? defaultExpanded;
   if (todos.length === 0) return <GenericCard name="TodoWrite" input={input} runStreaming={runStreaming} runSucceeded={runSucceeded} />;

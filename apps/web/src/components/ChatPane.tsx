@@ -994,6 +994,7 @@ function PinnedTodoSlot({
         input={input}
         runStreaming={streaming}
         runSucceeded={!streaming}
+        compactWhenLarge
         onDismiss={() => {
           if (exiting) return;
           setExiting(true);
