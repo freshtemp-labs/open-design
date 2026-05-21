@@ -45,6 +45,8 @@ function generateFiles(count: number): ProjectFile[] {
 function renderPanel(files: ProjectFile[]) {
   const onOpenFile = vi.fn();
   const onDeleteFiles = vi.fn();
+  const onUploadFiles = vi.fn();
+  const onNewSketch = vi.fn();
   const result = render(
     <DesignFilesPanel
       projectId="test-project"
@@ -57,12 +59,12 @@ function renderPanel(files: ProjectFile[]) {
       onDeleteFile={vi.fn()}
       onDeleteFiles={onDeleteFiles}
       onUpload={vi.fn()}
-      onUploadFiles={vi.fn()}
+      onUploadFiles={onUploadFiles}
       onPaste={vi.fn()}
-      onNewSketch={vi.fn()}
+      onNewSketch={onNewSketch}
     />,
   );
-  return { ...result, onDeleteFiles, onOpenFile };
+  return { ...result, onDeleteFiles, onOpenFile, onUploadFiles, onNewSketch };
 }
 
 function getPageInfo(container: HTMLElement): string {
@@ -121,6 +123,30 @@ describe('DesignFilesPanel grouping', () => {
 
     expect(screen.queryByRole('group', { name: 'Group by' })).toBeNull();
     expect(screen.getByTestId('design-file-row-live:artifact-1')).toBeTruthy();
+  });
+
+  it('merges the empty-state drop target with the central CTA', async () => {
+    const { container, onUploadFiles } = renderPanel([]);
+    const empty = screen.getByTestId('design-files-empty');
+    const dropped = new File(['hello'], 'hello.txt', { type: 'text/plain' });
+
+    expect(container.querySelector('.df-drop')).toBeNull();
+    expect(screen.getByTestId('design-files-empty-new-sketch')).toBeTruthy();
+
+    fireEvent.drop(empty.querySelector('.df-empty-pill')!, {
+      dataTransfer: { files: [dropped], items: [] },
+    });
+
+    await waitFor(() => {
+      expect(onUploadFiles).toHaveBeenCalledWith([dropped]);
+    });
+  });
+
+  it('keeps the footer dropzone once files exist', () => {
+    const { container } = renderPanel([file({ name: 'page.html' })]);
+
+    expect(screen.queryByTestId('design-files-empty')).toBeNull();
+    expect(container.querySelector('.df-drop')).toBeTruthy();
   });
 
   it('groups files by kind when kind grouping is selected', () => {

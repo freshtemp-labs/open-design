@@ -902,6 +902,7 @@ export function DesignFilesPanel({
         ) : null}
       </div>
     ) : null;
+  const isEmpty = files.length === 0 && liveArtifacts.length === 0;
 
   return (
     <div className={`df-panel ${preview ? '' : 'no-preview'}`}>
@@ -927,12 +928,34 @@ export function DesignFilesPanel({
             {kindFilterControl}
             {fileActions}
           </div>
-          {files.length === 0 && liveArtifacts.length === 0 ? (
+          {isEmpty ? (
             <div className="df-empty" data-testid="design-files-empty">
-              <div className="df-empty-pill">
+              <div
+                className={`df-empty-pill${draggingFiles ? ' dragging' : ''}`}
+                onDragEnter={(ev) => {
+                  ev.preventDefault();
+                  dragDepthRef.current += 1;
+                  setDraggingFiles(true);
+                }}
+                onDragOver={(ev) => {
+                  ev.preventDefault();
+                  ev.dataTransfer.dropEffect = 'copy';
+                }}
+                onDragLeave={(ev) => {
+                  if (!ev.currentTarget.contains(ev.relatedTarget as Node | null)) {
+                    dragDepthRef.current = 0;
+                    setDraggingFiles(false);
+                    return;
+                  }
+                  dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+                  if (dragDepthRef.current === 0) setDraggingFiles(false);
+                }}
+                onDrop={handleDrop}
+              >
                 <span className="df-empty-title">
                   {t('designFiles.empty')}
                 </span>
+                <span className="df-empty-desc">{t('designFiles.dropDesc')}</span>
                 <button
                   type="button"
                   className="df-empty-cta"
@@ -1193,31 +1216,33 @@ export function DesignFilesPanel({
               ) : null}
             </>
           )}
-          <div
-            className={`df-drop ${draggingFiles ? 'dragging' : ''}`}
-            onDragEnter={(ev) => {
-              ev.preventDefault();
-              dragDepthRef.current += 1;
-              setDraggingFiles(true);
-            }}
-            onDragOver={(ev) => {
-              ev.preventDefault();
-              ev.dataTransfer.dropEffect = 'copy';
-            }}
-            onDragLeave={(ev) => {
-              if (!ev.currentTarget.contains(ev.relatedTarget as Node | null)) {
-                dragDepthRef.current = 0;
-                setDraggingFiles(false);
-                return;
-              }
-              dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
-              if (dragDepthRef.current === 0) setDraggingFiles(false);
-            }}
-            onDrop={handleDrop}
-          >
-            <span className="label">{t('designFiles.dropTitle')}</span>
-            <span className="desc">{t('designFiles.dropDesc')}</span>
-          </div>
+          {!isEmpty ? (
+            <div
+              className={`df-drop ${draggingFiles ? 'dragging' : ''}`}
+              onDragEnter={(ev) => {
+                ev.preventDefault();
+                dragDepthRef.current += 1;
+                setDraggingFiles(true);
+              }}
+              onDragOver={(ev) => {
+                ev.preventDefault();
+                ev.dataTransfer.dropEffect = 'copy';
+              }}
+              onDragLeave={(ev) => {
+                if (!ev.currentTarget.contains(ev.relatedTarget as Node | null)) {
+                  dragDepthRef.current = 0;
+                  setDraggingFiles(false);
+                  return;
+                }
+                dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+                if (dragDepthRef.current === 0) setDraggingFiles(false);
+              }}
+              onDrop={handleDrop}
+            >
+              <span className="label">{t('designFiles.dropTitle')}</span>
+              <span className="desc">{t('designFiles.dropDesc')}</span>
+            </div>
+          ) : null}
         </div>
       </div>
       {preview && previewFile ? (
