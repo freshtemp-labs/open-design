@@ -4796,6 +4796,7 @@ function HtmlViewer({
       if (patch.kind === 'set-style') {
         reconcileManualEditStyleSave(patch.id, patch.styles, result.source);
       }
+      setManualEditError(null);
       await onFileSaved?.();
       return true;
     } finally {
