@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useT } from '../i18n';
-import { Icon } from './Icon';
+import { RemixIcon } from './RemixIcon';
 
 interface Props {
   actions?: ReactNode;
@@ -33,7 +33,7 @@ export function AppChromeHeader({
           title={resolvedBackLabel}
           aria-label={resolvedBackLabel}
         >
-          <Icon name="arrow-left" size={15} />
+          <RemixIcon name="arrow-left-line" size={16} />
         </button>
       ) : null}
       {children ? <div className="app-chrome-content">{children}</div> : null}
@@ -61,7 +61,7 @@ export function SettingsIconButton({
       title={title}
       aria-label={ariaLabel}
     >
-      <Icon name="settings" size={17} />
+      <RemixIcon name="settings-line" size={18} />
     </button>
   );
 }

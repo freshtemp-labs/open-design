@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '../i18n';
-import { AgentIcon } from './AgentIcon';
-import { Icon } from './Icon';
+import { RemixIcon } from './RemixIcon';
 import { renderModelOptions } from './modelOptions';
 import type { AgentInfo, AppConfig, ExecMode } from '../types';
 import { apiProtocolLabel } from '../utils/apiProtocol';
@@ -96,12 +95,8 @@ export function AvatarMenu({
         title={t('avatar.title')}
         aria-label={t('avatar.title')}
       >
-        {currentAgent ? (
-          <AgentIcon id={currentAgent.id} size={18} />
-        ) : (
-          <Icon name="link" size={16} />
-        )}
-        <Icon name="chevron-down" size={10} />
+        <RemixIcon name={currentAgent ? 'robot-2-line' : 'link'} size={18} />
+        <RemixIcon name="arrow-down-s-line" size={13} />
       </button>
       {open ? (
         <div className="avatar-popover" role="dialog" aria-label={t('avatar.title')}>
@@ -143,7 +138,7 @@ export function AvatarMenu({
             disabled={!daemonLive && config.mode !== 'daemon'}
           >
             <span className="avatar-item-icon" aria-hidden>
-              <Icon name="file-code" size={14} />
+              <RemixIcon name="file-code-line" size={15} />
             </span>
             <span>{t('avatar.useLocal')}</span>
             {config.mode === 'daemon' ? (
@@ -152,7 +147,7 @@ export function AvatarMenu({
               <span className="avatar-item-meta">{t('avatar.metaOffline')}</span>
             ) : null}
             {config.mode === 'daemon' ? (
-              <Icon name="check" size={13} className="avatar-item-check" />
+              <RemixIcon name="check-line" size={14} className="avatar-item-check" />
             ) : null}
           </button>
           <button
@@ -162,14 +157,14 @@ export function AvatarMenu({
             onClick={() => onModeChange('api')}
           >
             <span className="avatar-item-icon" aria-hidden>
-              <Icon name="link" size={14} />
+              <RemixIcon name="link" size={15} />
             </span>
             <span>{t('avatar.useApi')}</span>
             {config.mode === 'api' ? (
               <span className="avatar-item-meta">{t('avatar.metaActive')}</span>
             ) : null}
             {config.mode === 'api' ? (
-              <Icon name="check" size={13} className="avatar-item-check" />
+              <RemixIcon name="check-line" size={14} className="avatar-item-check" />
             ) : null}
           </button>
 
@@ -190,7 +185,7 @@ export function AvatarMenu({
                       // pick a model for the agent they just chose.
                     }}
                   >
-                    <AgentIcon id={a.id} size={18} />
+                    <RemixIcon name="robot-2-line" size={18} />
                     <span>{a.name}</span>
                     {selected ? (
                       <span className="avatar-item-meta">
@@ -200,7 +195,7 @@ export function AvatarMenu({
                       <span className="avatar-item-meta">{a.version}</span>
                     ) : null}
                     {selected ? (
-                      <Icon name="check" size={13} className="avatar-item-check" />
+                      <RemixIcon name="check-line" size={14} className="avatar-item-check" />
                     ) : null}
                   </button>
                 );
@@ -278,7 +273,7 @@ export function AvatarMenu({
                 }}
               >
                 <span className="avatar-item-icon" aria-hidden>
-                  <Icon name="reload" size={14} />
+                  <RemixIcon name="refresh-line" size={15} />
                 </span>
                 <span>{t('avatar.rescan')}</span>
               </button>
@@ -296,7 +291,7 @@ export function AvatarMenu({
             }}
           >
             <span className="avatar-item-icon" aria-hidden>
-              <Icon name="settings" size={14} />
+              <RemixIcon name="settings-line" size={15} />
             </span>
             <span>{t('avatar.settings')}</span>
             <span className="avatar-item-meta">{isMacPlatform() ? '⌘,' : 'Ctrl+,'}</span>
@@ -311,7 +306,7 @@ export function AvatarMenu({
               }}
             >
               <span className="avatar-item-icon" aria-hidden>
-                <Icon name="arrow-left" size={14} />
+                <RemixIcon name="arrow-left-line" size={15} />
               </span>
               <span>{t('avatar.backToProjects')}</span>
             </button>

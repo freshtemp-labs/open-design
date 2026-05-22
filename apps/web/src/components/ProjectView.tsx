@@ -129,6 +129,7 @@ import {
 import { decideAutoOpenAfterWrite } from './auto-open-file';
 import { FileWorkspace } from './FileWorkspace';
 import { Icon } from './Icon';
+import { RemixIcon } from './RemixIcon';
 import {
   buildPluginFolderAgentActionPrompt,
   type PluginFolderAgentAction,
@@ -3786,7 +3787,7 @@ export function ProjectView({
                 aria-expanded={projectSettingsOpen}
                 onClick={() => setProjectSettingsOpen((open) => !open)}
               >
-                <Icon name="tweaks" size={16} />
+                <RemixIcon name="equalizer-line" size={17} />
               </button>
               {projectSettingsOpen ? (
                 <div
@@ -3805,7 +3806,7 @@ export function ProjectView({
                     }}
                   >
                     <span className="project-settings-item-icon" aria-hidden>
-                      <Icon name="sliders" size={14} />
+                      <RemixIcon name="sound-module-line" size={15} />
                     </span>
                     <span className="project-settings-item-main">
                       <span className="project-settings-item-label">{t('project.customInstructions')}</span>

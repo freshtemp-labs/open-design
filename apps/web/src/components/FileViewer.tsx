@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { CircleDashed, LassoSelect, PenLine } from 'lucide-react';
 import { APP_CHROME_FILE_ACTIONS_ID } from './AppChromeHeader';
 import {
   anonymizeArtifactId,
@@ -81,6 +80,7 @@ import type {
   ProjectFile,
 } from '../types';
 import { Icon } from './Icon';
+import { RemixIcon } from './RemixIcon';
 import { Toast } from './Toast';
 import { PaletteTweaks, type PaletteId } from './PaletteTweaks';
 import { PreviewDrawOverlay, type PreviewDrawMode } from './PreviewDrawOverlay';
@@ -437,7 +437,7 @@ function PreviewViewportControls({
         onClick={() => setOpen((value) => !value)}
       >
         <span>{t(activePreset.labelKey)}</span>
-        <Icon name="chevron-down" size={11} />
+        <RemixIcon name="arrow-down-s-line" size={14} />
       </button>
       {open ? (
         <div className="viewer-viewport-menu" id={listboxId} role="listbox" aria-label={t('fileViewer.viewportAria')}>
@@ -951,20 +951,20 @@ export function LiveArtifactViewer({
             title={t('fileViewer.present')}
             onClick={() => setPresentMenuOpen((v) => !v)}
           >
-            <Icon name="present" size={13} />
+            <RemixIcon name="slideshow-3-line" size={15} />
           </button>
           {presentMenuOpen ? (
             <div className="present-menu" role="menu">
               <button role="menuitem" onClick={presentInThisTab}>
-                <span className="present-icon"><Icon name="eye" size={13} /></span>{' '}
+                <span className="present-icon"><RemixIcon name="eye-line" size={14} /></span>{' '}
                 {t('fileViewer.presentInTab')}
               </button>
               <button role="menuitem" onClick={presentFullscreen}>
-                <span className="present-icon"><Icon name="play" size={13} /></span>{' '}
+                <span className="present-icon"><RemixIcon name="play-line" size={14} /></span>{' '}
                 {t('fileViewer.presentFullscreen')}
               </button>
               <button role="menuitem" onClick={presentNewTab}>
-                <span className="present-icon"><Icon name="share" size={13} /></span>{' '}
+                <span className="present-icon"><RemixIcon name="share-forward-line" size={14} /></span>{' '}
                 {t('fileViewer.presentNewTab')}
               </button>
             </div>
@@ -1915,7 +1915,7 @@ export function CommentSidePanel({
         title={t('preview.showSidebar', { label: commentsLabel })}
         onClick={() => onCollapsedChange(false)}
       >
-        <Icon name="comment" size={14} />
+        <RemixIcon name="message-3-line" size={15} />
         <span>{commentsLabel}</span>
         {comments.length > 0 ? <strong>{comments.length}</strong> : null}
       </button>
@@ -1926,7 +1926,7 @@ export function CommentSidePanel({
     <aside className="comment-side-panel" data-testid="comment-side-panel" aria-label={commentsLabel}>
       <div className="comment-side-header">
         <div className="comment-side-title">
-          <Icon name="comment" size={14} />
+          <RemixIcon name="message-3-line" size={15} />
           <span>{commentsLabel}</span>
         </div>
         <button
@@ -3272,9 +3272,9 @@ function ReactComponentViewer({
                   aria-expanded={shareMenuOpen}
                   onClick={() => setShareMenuOpen((v) => !v)}
                 >
-                  <Icon name="download" size={13} />
+                  <RemixIcon name="download-2-line" size={15} />
                   <span>{t('fileViewer.shareLabel')}</span>
-                  <Icon name="chevron-down" size={11} />
+                  <RemixIcon name="arrow-down-s-line" size={14} />
                 </button>
                 {shareMenuOpen ? (
                   <div className="share-menu-popover" role="menu">
@@ -3287,7 +3287,7 @@ function ReactComponentViewer({
                         exportAsJsx(source, exportTitle, sourceExtension);
                       }}
                     >
-                      <span className="share-menu-icon"><Icon name="file-code" size={14} /></span>
+                      <span className="share-menu-icon"><RemixIcon name="file-code-line" size={15} /></span>
                       <span>{t('fileViewer.exportJsx')}</span>
                     </button>
                     <button
@@ -3299,7 +3299,7 @@ function ReactComponentViewer({
                         exportReactComponentAsHtml(source, exportTitle);
                       }}
                     >
-                      <span className="share-menu-icon"><Icon name="file" size={14} /></span>
+                      <span className="share-menu-icon"><RemixIcon name="file-line" size={15} /></span>
                       <span>{t('fileViewer.exportReactHtml')}</span>
                     </button>
                     <div className="share-menu-divider" />
@@ -3312,7 +3312,7 @@ function ReactComponentViewer({
                         exportReactComponentAsZip(source, exportTitle, sourceExtension);
                       }}
                     >
-                      <span className="share-menu-icon"><Icon name="download" size={14} /></span>
+                      <span className="share-menu-icon"><RemixIcon name="file-zip-line" size={15} /></span>
                       <span>{t('fileViewer.exportZip')}</span>
                     </button>
                   </div>
@@ -5718,7 +5718,7 @@ function HtmlViewer({
                   aria-pressed={boardMode && boardTool === 'inspect'}
                   onClick={activateCommentTool}
                 >
-                  <Icon name="comment" size={14} />
+                  <RemixIcon name="message-3-line" size={15} />
                   {boardMode && boardTool === 'inspect' ? <span className="viewer-action-active-dot" aria-hidden /> : null}
                 </button>
               </div>
@@ -5737,7 +5737,7 @@ function HtmlViewer({
                     setPalettePopoverOpen(false);
                   }}
                 >
-                  <Icon name="more-horizontal" size={15} />
+                  <RemixIcon name="more-2-fill" size={16} />
                 </button>
                 {agentToolsOpen ? (
                   <div className="artifact-tool-menu" role="menu" aria-label="More annotation tools">
@@ -5750,7 +5750,7 @@ function HtmlViewer({
                       aria-pressed={boardMode && boardTool === 'pod'}
                       onClick={() => activateBoardPicker('pod')}
                     >
-                      <LassoSelect size={14} strokeWidth={1.7} aria-hidden focusable="false" />
+                      <RemixIcon name="focus-3-line" size={15} />
                       <span>Region</span>
                     </button>
                     <button
@@ -5762,10 +5762,7 @@ function HtmlViewer({
                       aria-pressed={drawOverlayOpen}
                       onClick={activateDrawTool}
                     >
-                      <span className="artifact-tool-combo-icon" aria-hidden>
-                        <CircleDashed className="artifact-tool-combo-ring" size={14} strokeWidth={1.7} />
-                        <PenLine className="artifact-tool-combo-pen" size={10} strokeWidth={2} />
-                      </span>
+                      <RemixIcon name="mark-pen-line" size={15} />
                       <span>Sketch on screenshot</span>
                     </button>
                   </div>
@@ -5898,7 +5895,7 @@ function HtmlViewer({
               aria-pressed={boardMode && boardTool === 'inspect'}
               onClick={activateCommentTool}
             >
-              <Icon name="comment" size={13} />
+              <RemixIcon name="message-3-line" size={14} />
               <span>{t('fileViewer.comment')}</span>
             </button>
           ) : null}
@@ -5921,20 +5918,20 @@ function HtmlViewer({
                   setPresentMenuOpen((v) => !v);
                 }}
               >
-                <Icon name="present" size={13} />
+                <RemixIcon name="slideshow-3-line" size={15} />
               </button>
               {presentMenuOpen ? (
                 <div className="present-menu" role="menu">
                   <button role="menuitem" onClick={() => { firePresentPopoverClick('in_this_tab'); presentInThisTab(); }}>
-                    <span className="present-icon"><Icon name="eye" size={13} /></span>{' '}
+                    <span className="present-icon"><RemixIcon name="eye-line" size={14} /></span>{' '}
                     {t('fileViewer.presentInTab')}
                   </button>
                   <button role="menuitem" onClick={() => { firePresentPopoverClick('fullscreen'); presentFullscreen(); }}>
-                    <span className="present-icon"><Icon name="play" size={13} /></span>{' '}
+                    <span className="present-icon"><RemixIcon name="play-line" size={14} /></span>{' '}
                     {t('fileViewer.presentFullscreen')}
                   </button>
                   <button role="menuitem" onClick={() => { firePresentPopoverClick('new_tab'); presentNewTab(); }}>
-                    <span className="present-icon"><Icon name="share" size={13} /></span>{' '}
+                    <span className="present-icon"><RemixIcon name="share-forward-line" size={14} /></span>{' '}
                     {t('fileViewer.presentNewTab')}
                   </button>
                 </div>
@@ -5952,9 +5949,9 @@ function HtmlViewer({
                 aria-expanded={shareMenuOpen}
                 onClick={openExportMenu}
               >
-                <Icon name="download" size={13} />
+                <RemixIcon name="download-2-line" size={15} />
                 <span>{t('fileViewer.shareLabel')}</span>
-                <Icon name="chevron-down" size={11} />
+                <RemixIcon name="arrow-down-s-line" size={14} />
               </button>
               {shareMenuOpen ? (
                 <div className="share-menu-popover" role="menu">
@@ -5973,7 +5970,7 @@ function HtmlViewer({
                       }));
                     }}
                   >
-                    <span className="share-menu-icon"><Icon name="file" size={14} /></span>
+                    <span className="share-menu-icon"><RemixIcon name="file-line" size={15} /></span>
                     <span>
                       {effectiveDeck
                         ? t('fileViewer.exportPdfAllSlides')
@@ -5999,7 +5996,7 @@ function HtmlViewer({
                       });
                     }}
                   >
-                    <span className="share-menu-icon"><Icon name="present" size={14} /></span>
+                    <span className="share-menu-icon"><RemixIcon name="file-ppt-line" size={15} /></span>
                     <span>{t('fileViewer.exportPptx') + '…'}</span>
                   </button>
                   <div className="share-menu-divider" />
@@ -6017,7 +6014,7 @@ function HtmlViewer({
                       }));
                     }}
                   >
-                    <span className="share-menu-icon"><Icon name="download" size={14} /></span>
+                    <span className="share-menu-icon"><RemixIcon name="file-zip-line" size={15} /></span>
                     <span>{t('fileViewer.exportZip')}</span>
                   </button>
                   <button
@@ -6029,7 +6026,7 @@ function HtmlViewer({
                       fireShareExport('html', () => exportAsHtml(source ?? '', exportTitle));
                     }}
                   >
-                    <span className="share-menu-icon"><Icon name="file-code" size={14} /></span>
+                    <span className="share-menu-icon"><RemixIcon name="file-code-line" size={15} /></span>
                     <span>{t('fileViewer.exportHtml')}</span>
                   </button>
                   {/* Export as Markdown — pass-through download of the
@@ -6047,7 +6044,7 @@ function HtmlViewer({
                       fireShareExport('markdown', () => exportAsMd(source ?? '', exportTitle));
                     }}
                   >
-                    <span className="share-menu-icon"><Icon name="file" size={14} /></span>
+                    <span className="share-menu-icon"><RemixIcon name="file-line" size={15} /></span>
                     <span>{t('fileViewer.exportMd')}</span>
                   </button>
                   {!useUrlLoadPreview ? (
@@ -6073,7 +6070,7 @@ function HtmlViewer({
                         }
                       }}
                     >
-                      <span className="share-menu-icon"><Icon name="image" size={14} /></span>
+                      <span className="share-menu-icon"><RemixIcon name="image-line" size={15} /></span>
                       <span>{t('fileViewer.exportImage')}</span>
                     </button>
                   ) : null}
@@ -6089,7 +6086,7 @@ function HtmlViewer({
                       });
                     }}
                   >
-                    <span className="share-menu-icon"><Icon name="copy" size={14} /></span>
+                    <span className="share-menu-icon"><RemixIcon name="file-copy-line" size={15} /></span>
                     <span>
                       {savingTemplate
                         ? t('fileViewer.savingTemplate')
@@ -6115,7 +6112,7 @@ function HtmlViewer({
                         fireShareExport(format, () => openDeployModal(option.id));
                       }}
                     >
-                      <span className="share-menu-icon"><Icon name="upload" size={14} /></span>
+                      <span className="share-menu-icon"><RemixIcon name="upload-cloud-line" size={15} /></span>
                       <span>{deployActionLabelFor(option.id)}</span>
                     </button>
                   ))}
@@ -6133,7 +6130,7 @@ function HtmlViewer({
                         void copyDeployLink(item.url);
                       }}
                     >
-                      <span className="share-menu-icon"><Icon name="copy" size={14} /></span>
+                      <span className="share-menu-icon"><RemixIcon name="file-copy-line" size={15} /></span>
                       <span>{copyDeployMenuLabel(item.providerLabel, item.url)}</span>
                     </button>
                   ))}
@@ -6513,7 +6510,7 @@ function HtmlViewer({
               }}
             >
               <span style={{ fontVariantNumeric: 'tabular-nums' }}>{zoom}%</span>
-              <Icon name="chevron-down" size={11} />
+              <RemixIcon name="arrow-down-s-line" size={14} />
             </button>
             {zoomMenuOpen ? (
               <div className="zoom-menu-popover" role="menu">

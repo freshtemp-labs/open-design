@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap');
+@import './styles/remixicon/remixicon.css';
 @import './styles/design-system-flow.css';
 
 /* ============================================================
@@ -14500,25 +14501,6 @@ button.ghost.mcp-copy-btn:hover:not(:disabled) {
   color: var(--text-muted);
   font-size: 12px;
 }
-.artifact-tool-combo-icon {
-  position: relative;
-  display: inline-flex;
-  width: 14px;
-  height: 14px;
-  flex: 0 0 14px;
-  color: currentColor;
-}
-.artifact-tool-combo-icon svg {
-  position: absolute;
-  inset: 0;
-  display: block;
-}
-.artifact-tool-combo-pen {
-  left: 4px;
-  top: 4px;
-  color: var(--red);
-}
-
 .share-menu { position: relative; display: inline-block; }
 .viewer-action-export {
   gap: 6px;
