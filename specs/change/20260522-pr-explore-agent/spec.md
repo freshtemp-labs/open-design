@@ -525,16 +525,25 @@ would require finance review.
 
 ## Rollout
 
-| Phase | Scope | Gate to next |
-|---|---|---|
-| P0 | This spec, maintainer review | +1 from ≥ 1 reviewer-pool member |
-| P1 (week 1) | Workflow lands on `main`. Required-reviewers environment initially has only `@lefarcen` (to keep approval-rate manageable for the first runs). Approve cadence: 1-3 PRs per day max. | 5 successful runs, no false alarms in reviewer-rated comments |
-| P2 (week 2-3) | Expand required-reviewers to full reviewer pool (`mrcfps`, `nettee`, `Siri-Ray`, `PerishCode`, `qiongyu1999`). Any pool member can approve. External contributor PRs become eligible — maintainers exercise judgment per PR. | 30+ approved runs across mixed internal/external PRs, accuracy ≥ 70% |
-| P3 (week 4-8) | Iterate prompt based on observed misses. Add Playwright trace recording for forensics. Pilot the adversarial-coverage agent (see Wrapper § Coverage limitations). | Steady-state |
-| P4 (future, separate proposal) | Self-driven Playwright driver (replaces `expect-cli` upstream dependency); video + overlay narration; the CLI-exploratory-agent that covers the `od` half of the dual-track invariant. | — |
+Phases measure **trust maturity**, not implementation effort. The
+code lands all at once (the spec + workflow + wrapper are in the
+same PR). Phases gate **who can approve runs** and what categories
+of PR are eligible to be approved.
+
+| Phase | Trigger to enter | Required-reviewers list | Approvable PRs |
+|---|---|---|---|
+| **P0** | Now | n/a (spec review) | n/a |
+| **P1** | Spec + implementation PR merged | `@lefarcen` only | Internal-only |
+| **P2** | After P1 sees ~5 approved runs with no false alarms | Full pool (`mrcfps`, `nettee`, `Siri-Ray`, `PerishCode`, `qiongyu1999`, `lefarcen`) | Internal + external, judgment per PR |
+| **P3** | After ~30 approved runs, accuracy ≥ 70% | Same as P2 | Add Playwright trace recording; pilot adversarial-coverage agent |
+| **P4** (separate spec) | When P3 reveals systematic limits | — | Self-driven Playwright driver replaces `expect-cli`; CLI-exploratory-agent covers the `od` half of dual-track |
 
 External-PR support is no longer its own phase — manual approval
 absorbs it from P2 onward.
+
+Each transition is a small repo-settings change (edit the environment's
+required-reviewers list in GitHub Settings) plus optionally a one-line
+charter / prompt update. None of them require a code redeploy.
 
 ## Open questions for maintainer review
 
