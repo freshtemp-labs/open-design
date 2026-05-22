@@ -54,6 +54,11 @@ const allowedWorkflowPaths = new Set([
   ".github/workflows/visual-pr-verify.yml",
 ]);
 
+function normalizeWorkflowPath(path: string): string {
+  const suffixIndex = path.indexOf("@");
+  return suffixIndex >= 0 ? path.slice(0, suffixIndex) : path;
+}
+
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is required`);
@@ -229,7 +234,7 @@ async function main(): Promise<void> {
       run.head_sha === pull.head.sha &&
       run.event === "pull_request" &&
       run.status === "action_required" &&
-      allowedWorkflowPaths.has(run.path) &&
+      allowedWorkflowPaths.has(normalizeWorkflowPath(run.path)) &&
       runBelongsToPullRequest(run, pull)
     );
   });
