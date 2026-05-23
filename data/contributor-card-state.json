@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-23T10:43:05.880Z",
+  "generatedAt": "2026-05-23T13:46:09.436Z",
   "contributors": {
     "1115052994": {
       "lastAnnouncedTier": "spark",
@@ -1537,6 +1537,13 @@
       "lastCheckedAt": "2026-05-23T10:43:05.879Z",
       "scoreVersion": "weighted-v1",
       "lastAnnouncedAt": "2026-05-23T10:43:05.879Z"
+    },
+    "bencium": {
+      "lastAnnouncedTier": "spark",
+      "lastKnownScore": 5,
+      "lastCheckedAt": "2026-05-23T13:46:09.436Z",
+      "scoreVersion": "weighted-v1",
+      "lastAnnouncedAt": "2026-05-23T13:46:09.436Z"
     }
   }
 }
