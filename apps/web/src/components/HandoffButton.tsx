@@ -16,6 +16,7 @@ import {
   type CodeAgentHandoffTarget,
 } from '../lib/build-code-agent-handoff-prompt';
 import { copyToClipboard } from '../lib/copy-to-clipboard';
+import { useT } from '../i18n';
 import { Icon } from './Icon';
 import { EditorIcon } from './EditorIcon';
 
@@ -24,9 +25,9 @@ const CODE_AGENT_TARGETS: CodeAgentHandoffTarget[] = ['react', 'vue', 'svelte', 
 
 interface Props {
   projectId: string;
-  projectName: string;
+  projectName?: string;
   projectDir?: string | null;
-  // Optional fallback "always open in OS file manager" — falls back to the
+  // Optional fallback "always open in OS file manager" - falls back to the
   // existing shell.openPath bridge in case the daemon catalogue is empty
   // (highly unlikely on macOS / Win / Linux but harmless to support).
   onRequestRevealInFinder?: () => void;
@@ -45,7 +46,7 @@ function writePreferred(id: HostEditorId): void {
   try {
     window.localStorage.setItem(PREFERRED_EDITOR_KEY, id);
   } catch {
-    // ignore — quota or sandboxed
+    // ignore - quota or sandboxed
   }
 }
 
@@ -108,10 +109,11 @@ function FrameworkIcon({ target }: { target: CodeAgentHandoffTarget }) {
 
 export function HandoffButton({
   projectId,
-  projectName,
+  projectName = projectId,
   projectDir,
   onRequestRevealInFinder,
 }: Props) {
+  const t = useT();
   const [editors, setEditors] = useState<HostEditor[]>([]);
   const [platform, setPlatform] = useState<HostEditorsResponse['platform']>('unknown');
   const [loaded, setLoaded] = useState(false);
@@ -172,10 +174,13 @@ export function HandoffButton({
   const preferred = readPreferred();
   const primary =
     available.find((e) => e.id === preferred) ?? available[0] ?? null;
+  const fallbackLabel = platform === 'win32' ? 'Explorer' : platform === 'linux' ? 'File Manager' : 'Finder';
+  const fallbackId: HostEditorId =
+    platform === 'win32' ? 'explorer' : platform === 'linux' ? 'file-manager' : 'finder';
 
   async function launch(editor: HostEditor) {
     if (!editor.available) {
-      // Still try — the user might have an unprobed path (e.g. macOS
+      // Still try - the user might have an unprobed path (e.g. macOS
       // bundle in /Applications). The daemon will return 409 if it
       // genuinely can't find it.
     }
@@ -233,10 +238,6 @@ export function HandoffButton({
     return null;
   }
 
-  const fallbackLabel = platform === 'win32' ? 'Explorer' : platform === 'linux' ? 'File Manager' : 'Finder';
-  const fallbackId: HostEditorId =
-    platform === 'win32' ? 'explorer' : platform === 'linux' ? 'file-manager' : 'finder';
-
   return (
     <div
       className={`handoff-wrap${open ? ' open' : ''}`}
@@ -244,15 +245,14 @@ export function HandoffButton({
       data-testid="handoff-wrap"
     >
       {/* Split control: both the labeled left side and caret open the
-          handoff picker. Sibling buttons (instead of a nested caret)
-          keep the caret as its own real tap target and avoid rendering
-          an invalid button-in-button. */}
+          handoff picker so open-folder and code-agent paths stay equally
+          discoverable. */}
       <div className="handoff-split">
         <button
           type="button"
           className="handoff-trigger"
           data-testid="handoff-trigger"
-          title="交付项目"
+          title={t('handoff.action')}
           onClick={() => setOpen((v) => !v)}
           disabled={busy !== null}
         >
@@ -260,20 +260,20 @@ export function HandoffButton({
             <>
               <EditorIcon editorId={primary.id} size={20} />
               <span className="handoff-trigger-label">
-                交付
+                {t('handoff.action')}
               </span>
             </>
           ) : (
             <>
-              <EditorIcon editorId="finder" size={20} />
-              <span className="handoff-trigger-label">交付</span>
+              <EditorIcon editorId={fallbackId} size={20} />
+              <span className="handoff-trigger-label">{t('handoff.action')}</span>
             </>
           )}
         </button>
         <button
           type="button"
           className="handoff-caret"
-          aria-label="Choose hand-off target"
+          aria-label={t('handoff.chooseTargetAria')}
           data-testid="handoff-caret"
           onClick={() => setOpen((v) => !v)}
           disabled={busy !== null}
@@ -327,7 +327,7 @@ export function HandoffButton({
                   className="handoff-menu-item"
                   role="menuitem"
                   onClick={() => onRequestRevealInFinder?.()}
-                  title={`No editors found on $PATH — opens in ${fallbackLabel}`}
+                  title={t('handoff.fallbackTitle', { target: fallbackLabel })}
                 >
                   <EditorIcon editorId={fallbackId} size={20} />
                   <span>{fallbackLabel}</span>
@@ -336,7 +336,7 @@ export function HandoffButton({
               {unavailable.length > 0 ? (
                 <>
                   <div className="handoff-menu-divider" />
-                  <div className="handoff-menu-section">Not installed</div>
+                  <div className="handoff-menu-section">{t('handoff.notInstalled')}</div>
                   {unavailable.map((editor) => (
                     <button
                       key={editor.id}
@@ -346,7 +346,7 @@ export function HandoffButton({
                       data-testid={`handoff-menu-item-${editor.id}`}
                       onClick={() => void launch(editor)}
                       disabled={busy === editor.id}
-                      title={`${editor.label} — not detected on $PATH`}
+                      title={t('handoff.notDetectedTitle', { target: editor.label })}
                     >
                       <EditorIcon editorId={editor.id} size={20} />
                       <span>{editor.label}</span>

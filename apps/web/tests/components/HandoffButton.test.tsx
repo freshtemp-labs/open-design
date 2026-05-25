@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HandoffButton } from '../../src/components/HandoffButton';
+import { I18nProvider, type Locale } from '../../src/i18n';
 import { copyToClipboard } from '../../src/lib/copy-to-clipboard';
 import { fetchHostEditors, openProjectInEditor } from '../../src/providers/registry';
 
@@ -19,6 +20,18 @@ vi.mock('../../src/lib/copy-to-clipboard', () => ({
 const mockedFetchHostEditors = vi.mocked(fetchHostEditors);
 const mockedOpenProjectInEditor = vi.mocked(openProjectInEditor);
 const mockedCopyToClipboard = vi.mocked(copyToClipboard);
+
+function renderHandoff(locale: Locale = 'zh-CN') {
+  render(
+    <I18nProvider initial={locale}>
+      <HandoffButton
+        projectId="proj-abc"
+        projectName="Acme Dashboard"
+        projectDir="/Users/bryan/projects/acme"
+      />
+    </I18nProvider>,
+  );
+}
 
 describe('HandoffButton', () => {
   beforeEach(() => {
@@ -39,17 +52,12 @@ describe('HandoffButton', () => {
 
   afterEach(() => {
     cleanup();
+    window.localStorage.clear();
     vi.clearAllMocks();
   });
 
   it('opens the handoff menu from the main trigger without launching an editor', async () => {
-    render(
-      <HandoffButton
-        projectId="proj-abc"
-        projectName="Acme Dashboard"
-        projectDir="/Users/bryan/projects/acme"
-      />,
-    );
+    renderHandoff();
 
     fireEvent.click(await screen.findByTestId('handoff-trigger'));
 
@@ -64,13 +72,7 @@ describe('HandoffButton', () => {
   });
 
   it('copies a framework-specific code agent prompt with the project path', async () => {
-    render(
-      <HandoffButton
-        projectId="proj-abc"
-        projectName="Acme Dashboard"
-        projectDir="/Users/bryan/projects/acme"
-      />,
-    );
+    renderHandoff();
 
     fireEvent.click(await screen.findByTestId('handoff-trigger'));
     fireEvent.click(screen.getByRole('tab', { name: 'Code agent' }));
@@ -87,13 +89,7 @@ describe('HandoffButton', () => {
   });
 
   it('shows framework icons for every code agent target', async () => {
-    render(
-      <HandoffButton
-        projectId="proj-abc"
-        projectName="Acme Dashboard"
-        projectDir="/Users/bryan/projects/acme"
-      />,
-    );
+    renderHandoff();
 
     fireEvent.click(await screen.findByTestId('handoff-trigger'));
     fireEvent.click(screen.getByRole('tab', { name: 'Code agent' }));
@@ -101,5 +97,23 @@ describe('HandoffButton', () => {
     for (const target of ['react', 'vue', 'svelte', 'solid']) {
       expect(screen.getByTestId(`handoff-framework-icon-${target}`)).toBeTruthy();
     }
+  });
+
+  it('localizes the primary handoff label', async () => {
+    renderHandoff('en');
+
+    const trigger = await screen.findByTestId('handoff-trigger');
+    expect(trigger.getAttribute('title')).toBe('Hand off');
+    expect(trigger.textContent).toContain('Hand off');
+  });
+
+  it('localizes the unavailable editor section', async () => {
+    renderHandoff('zh-CN');
+
+    fireEvent.click(await screen.findByTestId('handoff-caret'));
+
+    expect(await screen.findByText('未安装')).toBeTruthy();
+    expect(screen.getByTestId('handoff-menu-item-vscode').getAttribute('title'))
+      .toBe('VS Code - 未在 $PATH 中检测到');
   });
 });
