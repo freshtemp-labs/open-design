@@ -222,9 +222,8 @@ interface Props {
   hasActiveDesignSystem?: boolean;
   activeDesignSystem?: DesignSystemSummary | null;
   sendDisabled?: boolean;
-  queuedItems?: Array<{ id: string; prompt: string }>;
+  queuedItems?: QueuedSendItem[];
   onRemoveQueuedSend?: (id: string) => void;
-  onUpdateQueuedSend?: (id: string, prompt: string) => void;
   onSendQueuedNow?: (id: string) => void;
   // Names that exist in the project folder. Tool cards and chips use this
   // set to decide whether a path can be opened as a tab.
@@ -323,6 +322,13 @@ interface Props {
 
 type Tab = 'chat' | 'comments';
 
+interface QueuedSendItem {
+  id: string;
+  prompt: string;
+  attachments?: ChatAttachment[];
+  commentAttachments?: ChatCommentAttachment[];
+}
+
 export function ChatPane({
   messages,
   streaming,
@@ -345,7 +351,6 @@ export function ChatPane({
   onRetry,
   onStop,
   onRemoveQueuedSend,
-  onUpdateQueuedSend,
   onSendQueuedNow,
   onRequestOpenFile,
   onRequestPluginFolderAgentAction,
@@ -1135,7 +1140,14 @@ export function ChatPane({
           <QueuedSendStrip
             items={queuedItems}
             onRemove={onRemoveQueuedSend}
-            onUpdate={onUpdateQueuedSend}
+            onEdit={(item) => {
+              composerRef.current?.restoreDraft({
+                text: item.prompt,
+                attachments: item.attachments ?? [],
+                commentAttachments: item.commentAttachments ?? [],
+              });
+              onRemoveQueuedSend?.(item.id);
+            }}
             onSendNow={onSendQueuedNow}
           />
           <ChatComposer
@@ -1231,36 +1243,19 @@ function PinnedTodoSlot({
 
 function QueuedSendStrip({
   items,
+  onEdit,
   onRemove,
   onSendNow,
-  onUpdate,
 }: {
-  items: Array<{ id: string; prompt: string }>;
+  items: QueuedSendItem[];
+  onEdit?: (item: QueuedSendItem) => void;
   onRemove?: (id: string) => void;
   onSendNow?: (id: string) => void;
-  onUpdate?: (id: string, prompt: string) => void;
 }) {
   const t = useT();
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingDraft, setEditingDraft] = useState('');
   if (items.length === 0) return null;
   const visible = items.slice(0, QUEUED_SEND_VISIBLE_LIMIT);
   const extra = items.length - visible.length;
-  const startEdit = (item: { id: string; prompt: string }) => {
-    setEditingId(item.id);
-    setEditingDraft(item.prompt);
-  };
-  const commitEdit = () => {
-    if (!editingId) return;
-    const next = editingDraft.trim();
-    if (next) onUpdate?.(editingId, next);
-    setEditingId(null);
-    setEditingDraft('');
-  };
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditingDraft('');
-  };
   return (
     <div className="chat-queued-send-strip" data-testid="chat-queued-send-strip">
       <div className="chat-queued-send-header">
@@ -1272,91 +1267,44 @@ function QueuedSendStrip({
       </div>
       {visible.map((item, index) => (
         <div
-          className={`chat-queued-send-row${index === 0 ? ' chat-queued-send-row-active' : ''}${
-            editingId === item.id ? ' chat-queued-send-row-editing' : ''
-          }`}
+          className={`chat-queued-send-row${index === 0 ? ' chat-queued-send-row-active' : ''}`}
           key={item.id}
         >
-          {editingId === item.id ? (
-            <form
-              className="chat-queued-send-edit-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                commitEdit();
-              }}
-            >
-              <input
-                className="chat-queued-send-edit-input"
-                value={editingDraft}
-                // eslint-disable-next-line jsx-a11y/no-autofocus
-                autoFocus
-                onChange={(event) => setEditingDraft(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    event.preventDefault();
-                    cancelEdit();
-                  }
-                }}
-                aria-label="Edit queued task"
-              />
-              <button
-                type="submit"
-                className="chat-queued-send-action"
-                title="Save"
-                aria-label="Save"
-                disabled={!editingDraft.trim()}
-              >
-                <Icon name="check" size={13} />
-              </button>
+          <span className="chat-queued-send-title">{summarizeQueuedPrompt(item.prompt)}</span>
+          <div className="chat-queued-send-actions">
+            {onEdit ? (
               <button
                 type="button"
                 className="chat-queued-send-action"
-                title="Cancel"
-                aria-label="Cancel"
-                onClick={cancelEdit}
+                title="Edit"
+                aria-label="Edit"
+                onClick={() => onEdit(item)}
               >
-                <Icon name="close" size={13} />
+                <Icon name="pencil" size={13} />
               </button>
-            </form>
-          ) : (
-            <>
-              <span className="chat-queued-send-title">{summarizeQueuedPrompt(item.prompt)}</span>
-              <div className="chat-queued-send-actions">
-                {onUpdate ? (
-                  <button
-                    type="button"
-                    className="chat-queued-send-action"
-                    title="Edit"
-                    aria-label="Edit"
-                    onClick={() => startEdit(item)}
-                  >
-                    <Icon name="pencil" size={13} />
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  className="chat-queued-send-action"
-                  title={t('chat.send')}
-                  aria-label={t('chat.send')}
-                  onClick={() => onSendNow?.(item.id)}
-                  disabled={!onSendNow}
-                >
-                  <Icon name="arrow-up" size={13} />
-                </button>
-                {onRemove ? (
-                  <button
-                    type="button"
-                    className="chat-queued-send-action"
-                    onClick={() => onRemove(item.id)}
-                    title={t('chat.comments.remove')}
-                    aria-label={t('chat.comments.remove')}
-                  >
-                    <Icon name="trash" size={13} />
-                  </button>
-                ) : null}
-              </div>
-            </>
-          )}
+            ) : null}
+            <button
+              type="button"
+              className="chat-queued-send-action"
+              title={t('chat.send')}
+              aria-label={t('chat.send')}
+              onClick={() => onSendNow?.(item.id)}
+              disabled={!onSendNow}
+            >
+              <Icon name="arrow-up" size={13} />
+            </button>
+            {onRemove ? (
+              <button
+                type="button"
+                className="chat-queued-send-action"
+                onClick={() => onRemove(item.id)}
+                title={t('chat.comments.remove')}
+                aria-label={t('chat.comments.remove')}
+              >
+                <Icon name="trash" size={13} />
+              </button>
+            ) : null}
+          </div>
         </div>
       ))}
       {extra > 0 ? (

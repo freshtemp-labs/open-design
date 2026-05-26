@@ -42,7 +42,6 @@ interface Props {
 
 const STROKE_COLOR = '#ff3b30';
 const STROKE_WIDTH = 4;
-const ACTIVE_BUTTON_COLOR = 'var(--accent)';
 const TARGET_COLOR = '#1677ff';
 
 export function PreviewDrawOverlay({
@@ -453,14 +452,6 @@ export function PreviewDrawOverlay({
         >
           <button
             type="button"
-            disabled={sending}
-            style={pillStyle(true)}
-            aria-pressed="true"
-          >
-            Draw
-          </button>
-          <button
-            type="button"
             onClick={undoStroke}
             disabled={!canUndo}
             style={historyButtonStyle(canUndo)}
@@ -564,7 +555,7 @@ function pillStyle(active: boolean): CSSProperties {
     display: 'inline-flex',
     alignItems: 'center',
     gap: 6,
-    background: active ? ACTIVE_BUTTON_COLOR : 'transparent',
+    background: active ? 'var(--accent)' : 'transparent',
     color: active ? '#fff' : 'inherit',
   };
 }

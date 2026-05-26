@@ -1,12 +1,18 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { forwardRef } from 'react';
+import { forwardRef, useImperativeHandle } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ChatPane, retryableAssistantMessage } from '../../src/components/ChatPane';
 import { DESIGN_SYSTEM_WORKSPACE_PROMPT_PREFIX } from '../../src/design-system-auto-prompt';
 import type { ChatMessage, Conversation, ProjectMetadata } from '../../src/types';
+
+const composerMocks = vi.hoisted(() => ({
+  focus: vi.fn(),
+  restoreDraft: vi.fn(),
+  setDraft: vi.fn(),
+}));
 
 vi.mock('../../src/i18n', () => ({
   useI18n: () => ({
@@ -24,13 +30,19 @@ vi.mock('../../src/components/AssistantMessage', () => ({
 }));
 
 vi.mock('../../src/components/ChatComposer', () => ({
-  ChatComposer: forwardRef(({ streaming }: { streaming: boolean }, _ref) => (
-    <output data-testid="composer-streaming">{streaming ? 'streaming' : 'idle'}</output>
-  )),
+  ChatComposer: forwardRef(({ streaming }: { streaming: boolean }, ref) => {
+    useImperativeHandle(ref, () => ({
+      focus: composerMocks.focus,
+      restoreDraft: composerMocks.restoreDraft,
+      setDraft: composerMocks.setDraft,
+    }));
+    return <output data-testid="composer-streaming">{streaming ? 'streaming' : 'idle'}</output>;
+  }),
 }));
 
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
 });
 
 describe('ChatPane streaming state', () => {
@@ -214,7 +226,6 @@ Expected output:
   it('shows several queued prompts above the composer before collapsing overflow', () => {
     const onRemoveQueuedSend = vi.fn();
     const onSendQueuedNow = vi.fn();
-    const onUpdateQueuedSend = vi.fn();
     const { container } = render(
       <ChatPane
         messages={[]}
@@ -223,7 +234,25 @@ Expected output:
         projectId="project-1"
         projectFiles={[]}
         queuedItems={[
-          { id: 'queued-1', prompt: 'Make the export button larger and use a warmer accent' },
+          {
+            id: 'queued-1',
+            prompt: 'Make the export button larger and use a warmer accent',
+            attachments: [{ path: 'brief.md', name: 'brief.md', kind: 'file' }],
+            commentAttachments: [
+              {
+                id: 'comment-1',
+                order: 1,
+                filePath: 'preview.html',
+                elementId: 'hero',
+                selector: '#hero',
+                label: 'Hero',
+                comment: 'Use a warmer accent',
+                currentText: 'Export',
+                pagePosition: { x: 10, y: 20, width: 30, height: 40 },
+                htmlHint: '<section id="hero">',
+              },
+            ],
+          },
           { id: 'queued-2', prompt: 'Then adjust the title spacing' },
           { id: 'queued-3', prompt: 'Reduce the subtitle size' },
           { id: 'queued-4', prompt: 'Switch to a lighter font weight' },
@@ -231,7 +260,6 @@ Expected output:
         ]}
         onRemoveQueuedSend={onRemoveQueuedSend}
         onSendQueuedNow={onSendQueuedNow}
-        onUpdateQueuedSend={onUpdateQueuedSend}
         onEnsureProject={async () => 'project-1'}
         onSend={vi.fn()}
         onStop={vi.fn()}
@@ -262,13 +290,25 @@ Expected output:
 
     const editButtons = screen.getAllByRole('button', { name: 'Edit' });
     fireEvent.click(editButtons[0]!);
-    const editInput = screen.getByRole('textbox', { name: 'Edit queued task' });
-    expect((editInput as HTMLInputElement).value).toBe(
-      'Make the export button larger and use a warmer accent',
-    );
-    fireEvent.change(editInput, { target: { value: 'Use a bolder export button' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(onUpdateQueuedSend).toHaveBeenCalledWith('queued-1', 'Use a bolder export button');
+    expect(composerMocks.restoreDraft).toHaveBeenCalledWith({
+      text: 'Make the export button larger and use a warmer accent',
+      attachments: [{ path: 'brief.md', name: 'brief.md', kind: 'file' }],
+      commentAttachments: [
+        {
+          id: 'comment-1',
+          order: 1,
+          filePath: 'preview.html',
+          elementId: 'hero',
+          selector: '#hero',
+          label: 'Hero',
+          comment: 'Use a warmer accent',
+          currentText: 'Export',
+          pagePosition: { x: 10, y: 20, width: 30, height: 40 },
+          htmlHint: '<section id="hero">',
+        },
+      ],
+    });
+    expect(onRemoveQueuedSend).toHaveBeenCalledWith('queued-1');
 
     const removeButtons = screen.getAllByRole('button', { name: 'chat.comments.remove' });
     fireEvent.click(removeButtons[1]!);

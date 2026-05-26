@@ -727,7 +727,12 @@ export function ProjectView({
   const currentConversationQueuedItems = activeConversationId
     ? queuedChatSends
         .filter((item) => item.conversationId === activeConversationId)
-        .map((item) => ({ id: item.id, prompt: item.prompt }))
+        .map((item) => ({
+          id: item.id,
+          prompt: item.prompt,
+          attachments: item.attachments,
+          commentAttachments: item.commentAttachments,
+        }))
     : [];
   const newConversationDisabled = creatingConversation;
   const activeCompletionNotificationRunsRef = useRef<Set<string>>(new Set());
@@ -2148,14 +2153,6 @@ export function ProjectView({
 
   const removeQueuedChatSend = useCallback((id: string) => {
     const next = queuedChatSendsRef.current.filter((item) => item.id !== id);
-    queuedChatSendsRef.current = next;
-    setQueuedChatSends(next);
-  }, []);
-
-  const updateQueuedChatSend = useCallback((id: string, prompt: string) => {
-    const next = queuedChatSendsRef.current.map((item) =>
-      item.id === id ? { ...item, prompt } : item,
-    );
     queuedChatSendsRef.current = next;
     setQueuedChatSends(next);
   }, []);
@@ -4288,7 +4285,6 @@ export function ProjectView({
               onRetry={handleRetry}
               onStop={handleStop}
               onRemoveQueuedSend={removeQueuedChatSend}
-              onUpdateQueuedSend={updateQueuedChatSend}
               onSendQueuedNow={sendQueuedChatSendNow}
               onRequestOpenFile={requestOpenFile}
               onRequestPluginFolderAgentAction={handlePluginFolderAgentAction}
