@@ -24,9 +24,7 @@ vi.mock('../../src/components/ManualEditPanel', async (importOriginal) => {
 import { FileViewer } from '../../src/components/FileViewer';
 
 function openManualTools() {
-  if (!screen.queryByRole('menu', { name: 'Manual tools' })) {
-    fireEvent.click(screen.getByRole('button', { name: 'Manual' }));
-  }
+  // Manual tools now live directly in the primary toolbar.
 }
 
 function clickManualTool(testId: string) {
@@ -291,13 +289,8 @@ describe('FileViewer manual edit history regressions', () => {
       '*',
     );
     await waitFor(() => {
-      expect(postMessageSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'od:srcdoc-transport-activate',
-          html: expect.not.stringContaining('data-od-id="hero"'),
-        }),
-        '*',
-      );
+      expect((screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement).srcdoc)
+        .not.toContain('data-od-id="hero"');
     });
   });
 });

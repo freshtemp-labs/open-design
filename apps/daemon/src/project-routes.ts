@@ -883,7 +883,7 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
 
   app.get('/api/projects/:id/raw/*splat', async (req, res) => {
     try {
-      const splatParam = req.params.splat;
+      const splatParam = (req.params as { splat?: string | string[] }).splat;
       const relPath = Array.isArray(splatParam) ? splatParam.join('/') : String(splatParam ?? '');
       const project = getProject(db, req.params.id);
       // PreviewModal loads artifact HTML via srcdoc, giving the iframe Origin: "null".
@@ -961,7 +961,7 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
   app.delete('/api/projects/:id/raw/*splat', async (req, res) => {
     try {
       const project = getProject(db, req.params.id);
-      const splatParam = req.params.splat;
+      const splatParam = (req.params as { splat?: string | string[] }).splat;
       const rawSplat = Array.isArray(splatParam) ? splatParam.join('/') : String(splatParam ?? '');
       await deleteProjectFile(PROJECTS_DIR, req.params.id, rawSplat, project?.metadata);
       /** @type {import('@open-design/contracts').DeleteProjectFileResponse} */
@@ -1008,7 +1008,7 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
   app.get('/api/projects/:id/files/*splat', async (req, res) => {
     try {
       const project = getProject(db, req.params.id);
-      const splatParam = req.params.splat;
+      const splatParam = (req.params as { splat?: string | string[] }).splat;
       const fileSplat = Array.isArray(splatParam) ? splatParam.join('/') : String(splatParam ?? '');
       const file = await readProjectFile(
         PROJECTS_DIR,

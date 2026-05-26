@@ -647,6 +647,7 @@ export function ProjectView({
     active: null,
   });
   const tabsLoadedRef = useRef(false);
+  const hasAppliedInitialPrimaryOpenRef = useRef(false);
   // Routed to FileWorkspace — bumped whenever the user clicks "open" on a
   // tool card, an attachment chip, or a produced-file chip in chat. We
   // include a nonce so re-clicking the same name after the user closed the
@@ -1021,6 +1022,7 @@ export function ProjectView({
   useEffect(() => {
     let cancelled = false;
     tabsLoadedRef.current = false;
+    hasAppliedInitialPrimaryOpenRef.current = false;
     (async () => {
       const state = await loadTabs(project.id);
       if (cancelled) return;
@@ -1092,10 +1094,15 @@ export function ProjectView({
 
   useEffect(() => {
     if (!tabsLoadedRef.current) return;
+    if (hasAppliedInitialPrimaryOpenRef.current) return;
     if (routeFileName) return;
-    if (openTabsState.active || openTabsState.tabs.length > 0) return;
+    if (openTabsState.active || openTabsState.tabs.length > 0) {
+      hasAppliedInitialPrimaryOpenRef.current = true;
+      return;
+    }
     const primaryFile = selectPrimaryProjectFile(projectFiles);
     if (!primaryFile) return;
+    hasAppliedInitialPrimaryOpenRef.current = true;
     persistTabsState({ tabs: [primaryFile.name], active: primaryFile.name });
   }, [openTabsState.active, openTabsState.tabs.length, persistTabsState, projectFiles, routeFileName]);
 
@@ -2184,7 +2191,6 @@ export function ProjectView({
       commentAttachments: ChatCommentAttachment[] = commentsToAttachments(attachedComments),
       meta?: ProjectChatSendMeta,
       baseMessages?: ChatMessage[],
-      options?: { bypassQueue?: boolean },
     ) => {
       if (!activeConversationId) return;
       if (messagesConversationIdRef.current !== activeConversationId) return;
@@ -2199,7 +2205,7 @@ export function ProjectView({
         attachments.length === 0 &&
         commentAttachments.length === 0
       ) return;
-      if (currentConversationBusy && !options?.bypassQueue) {
+      if (currentConversationBusy) {
         enqueueChatSend({
           id: randomUUID(),
           conversationId: activeConversationId,
@@ -2865,8 +2871,6 @@ export function ProjectView({
       item.attachments,
       item.commentAttachments,
       item.meta,
-      undefined,
-      { bypassQueue: true },
     );
   }, [currentConversationBusy, handleSend, prioritizeQueuedChatSend, removeQueuedChatSend]);
 

@@ -5720,10 +5720,10 @@ function HtmlViewer({
       setBoardMode(false);
       clearBoardComposer();
       setInspectMode(false);
-      setDrawOverlayIntent('draw');
+      setDrawOverlayIntent('screenshot');
       setMode('preview');
-      setDrawOverlayOpen(false);
-      setScreenshotToast(true);
+      setDrawOverlayOpen(true);
+      setScreenshotToast(false);
       closeArtifactToolMenus();
     };
     if (manualEditMode) {
@@ -6310,13 +6310,13 @@ function HtmlViewer({
                 <RemixIcon name="mark-pen-line" size={15} />
               </button>
               <button
-                className={`viewer-action viewer-action-icon${screenshotToast ? ' active' : ''}`}
+                className={`viewer-action viewer-action-icon${drawOverlayOpen && drawOverlayIntent === 'screenshot' ? ' active' : ''}`}
                 type="button"
                 data-testid="screenshot-capture-toggle"
                 data-tooltip="Screenshot"
                 title="Screenshot"
                 aria-label="Screenshot"
-                aria-pressed={screenshotToast}
+                aria-pressed={drawOverlayOpen && drawOverlayIntent === 'screenshot'}
                 onClick={activateScreenshotTool}
               >
                 <RemixIcon name="screenshot-2-line" size={15} />

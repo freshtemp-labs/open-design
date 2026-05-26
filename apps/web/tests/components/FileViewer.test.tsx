@@ -1423,7 +1423,7 @@ describe('FileViewer tweaks toolbar', () => {
     });
   }
 
-  it('renders Annotation, Edit, and Draw as the primary preview tools', () => {
+  it('renders Annotation, Edit, and Draw as the primary preview tools', async () => {
     render(
       <FileViewer projectId="project-1" projectKind="prototype" file={htmlPreviewFile()}
         liveHtml='<html><body><main data-od-id="hero">Hero</main></body></html>'
@@ -1453,10 +1453,11 @@ describe('FileViewer tweaks toolbar', () => {
     expect(screen.queryByPlaceholderText('Add a note for this annotation')).toBeNull();
 
     fireEvent.click(screen.getByTestId('screenshot-capture-toggle'));
-    expect(screen.queryByPlaceholderText('Add a note for this annotation')).toBeNull();
-    expect(screen.getByRole('status').textContent).toContain('截图已保存到剪贴板');
+    expect(screen.getByPlaceholderText('Add a note for this annotation')).toBeTruthy();
+    expect(screen.queryByRole('status')).toBeNull();
     expect(screen.getByTestId('screenshot-capture-toggle').getAttribute('aria-pressed')).toBe('true');
     expect(screen.getByTestId('draw-overlay-toggle').getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', false);
   });
 
   it('keeps the Draw bar open after queueing an annotation', () => {
