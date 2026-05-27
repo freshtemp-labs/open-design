@@ -218,7 +218,7 @@ function agentTimeoutMs(): number {
 }
 
 export function mergeNoProxyWithLoopbackDefaults(noProxy: string | undefined): string | null {
-  if (noProxy?.trim() === '*') return '*';
+  if (noProxy?.split(',').some((token) => token.trim() === '*')) return '*';
   const seen = new Set<string>();
   const values: string[] = [];
   for (const rawToken of [
