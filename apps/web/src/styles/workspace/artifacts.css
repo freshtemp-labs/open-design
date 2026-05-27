@@ -669,6 +669,198 @@
   background: var(--bg-subtle);
 }
 
+.agent-scan-card {
+  position: relative;
+  display: grid;
+  align-content: center;
+  gap: 20px;
+  overflow: hidden;
+  min-height: 296px;
+  padding: 30px 34px;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 34%),
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-panel) 90%, var(--accent) 10%), var(--bg-subtle));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 6%, transparent),
+    0 18px 42px color-mix(in srgb, #000 18%, transparent);
+}
+
+.agent-scan-card::before {
+  content: '';
+  position: absolute;
+  inset: 18px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 8%, transparent);
+  pointer-events: none;
+}
+
+.agent-scan-card__stage {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.agent-scan-card__ring {
+  position: relative;
+  display: block;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 14px;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at center, var(--bg-subtle) 50%, transparent 52%),
+    conic-gradient(from 0deg, color-mix(in srgb, var(--accent) 92%, #fff) 0 84deg, color-mix(in srgb, var(--accent) 22%, transparent) 84deg 180deg, transparent 180deg 360deg);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent),
+    0 0 32px color-mix(in srgb, var(--accent) 18%, transparent);
+  animation: agent-scan-ring 1.15s linear infinite;
+}
+
+.agent-scan-card__ring::after {
+  content: '';
+  position: absolute;
+  inset: 15px;
+  border-radius: inherit;
+  background: var(--accent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 42%, transparent);
+}
+
+.agent-scan-card__stage strong {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.agent-scan-card__stage > span:not(.agent-scan-card__ring) {
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.agent-scan-card__progress {
+  width: min(240px, 70%);
+  height: 2px;
+  margin-top: 18px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.agent-scan-card__progress span {
+  display: block;
+  width: 44%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  animation: agent-scan-progress 1.35s cubic-bezier(0.23, 1, 0.32, 1) infinite;
+}
+
+.agent-scan-card__rows {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  width: min(640px, 100%);
+  justify-self: center;
+}
+
+.agent-scan-card__rows span {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-rows: 10px 8px;
+  gap: 8px 10px;
+  align-items: center;
+  min-height: 54px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-panel) 72%, transparent);
+  opacity: 0.7;
+}
+
+.agent-scan-card__rows i,
+.agent-scan-card__rows b,
+.agent-scan-card__rows em {
+  display: block;
+  overflow: hidden;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, transparent, color-mix(in srgb, var(--text) 9%, transparent), transparent),
+    color-mix(in srgb, var(--text) 9%, transparent);
+  background-size: 220% 100%, 100% 100%;
+  animation: agent-scan-row 1.45s cubic-bezier(0.23, 1, 0.32, 1) infinite;
+}
+
+.agent-scan-card__rows i {
+  grid-row: 1 / span 2;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+
+.agent-scan-card__rows b {
+  width: 82%;
+  height: 10px;
+}
+
+.agent-scan-card__rows em {
+  width: 54%;
+  height: 8px;
+}
+
+.agent-scan-card__rows span:nth-child(2) {
+  opacity: 0.58;
+}
+
+.agent-scan-card__rows span:nth-child(3) {
+  opacity: 0.46;
+}
+
+.agent-scan-card__rows span:nth-child(2) i,
+.agent-scan-card__rows span:nth-child(2) b,
+.agent-scan-card__rows span:nth-child(2) em {
+  animation-delay: 120ms;
+}
+
+.agent-scan-card__rows span:nth-child(3) i,
+.agent-scan-card__rows span:nth-child(3) b,
+.agent-scan-card__rows span:nth-child(3) em {
+  animation-delay: 240ms;
+}
+
+@keyframes agent-scan-ring {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes agent-scan-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(230%);
+  }
+}
+
+@keyframes agent-scan-row {
+  from {
+    background-position: 120% 0, 0 0;
+  }
+  to {
+    background-position: -120% 0, 0 0;
+  }
+}
+
 .agent-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

@@ -1481,6 +1481,7 @@ export function App() {
         <SettingsDialog
           initial={config}
           agents={agents}
+          agentsLoading={agentsLoading}
           daemonLive={daemonLive}
           appVersionInfo={appVersionInfo}
           welcome={settingsWelcome}

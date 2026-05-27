@@ -148,6 +148,7 @@ export type SettingsSection =
 interface Props {
   initial: AppConfig;
   agents: AgentInfo[];
+  agentsLoading?: boolean;
   daemonLive: boolean;
   appVersionInfo: AppVersionInfo | null;
   welcome?: boolean;
@@ -797,6 +798,7 @@ export function switchApiProtocolConfig(
 export function SettingsDialog({
   initial,
   agents,
+  agentsLoading = false,
   daemonLive,
   appVersionInfo,
   welcome,
@@ -1971,6 +1973,7 @@ export function SettingsDialog({
   const activeHeader = sectionHeader[activeSection];
   const installedAgents = agents.filter((a) => a.available);
   const unavailableAgents = agents.filter((a) => !a.available);
+  const initialAgentScanRunning = agentsLoading && agents.length === 0;
   const agentModelOptionLabel = (
     model: ProviderModelOption | undefined,
     fallback: string,
@@ -2492,7 +2495,23 @@ export function SettingsDialog({
                   <p className="hint">{t('settings.codeAgentHint')}</p>
                 </div>
               </div>
-              {agents.length === 0 ? (
+              {initialAgentScanRunning ? (
+                <div className="agent-scan-card" role="status" aria-live="polite">
+                  <div className="agent-scan-card__stage">
+                    <span className="agent-scan-card__ring" aria-hidden />
+                    <strong>{t('settings.rescanRunning')}</strong>
+                    <span>{t('settings.codeAgentHint')}</span>
+                    <div className="agent-scan-card__progress" aria-hidden>
+                      <span />
+                    </div>
+                  </div>
+                  <div className="agent-scan-card__rows" aria-hidden>
+                    <span><i /><b /><em /></span>
+                    <span><i /><b /><em /></span>
+                    <span><i /><b /><em /></span>
+                  </div>
+                </div>
+              ) : agents.length === 0 ? (
                 <div className="empty-card">
                   {t('settings.noAgentsDetected')}
                 </div>
