@@ -49,19 +49,21 @@ function renderSwitcher(
   config: Partial<AppConfig> = {},
   agents: AgentInfo[] = [amrAgent],
 ) {
-  return render(
+  const onAgentModelChange = vi.fn();
+  const view = render(
     <InlineModelSwitcher
       config={{ ...baseConfig, ...config }}
       agents={agents}
       daemonLive={true}
       onModeChange={vi.fn()}
       onAgentChange={vi.fn()}
-      onAgentModelChange={vi.fn()}
+      onAgentModelChange={onAgentModelChange}
       onApiProtocolChange={vi.fn()}
       onApiModelChange={vi.fn()}
       onOpenSettings={vi.fn()}
     />,
   );
+  return { ...view, onAgentModelChange };
 }
 
 describe('InlineModelSwitcher AMR row', () => {
@@ -174,7 +176,7 @@ describe('InlineModelSwitcher AMR row', () => {
     ]);
   });
 
-  it('does not expose stale saved AMR models as selectable custom options', async () => {
+  it('persists the live AMR fallback when the saved AMR model is stale', async () => {
     vi.stubGlobal('fetch', vi.fn(async () =>
       new Response(
         JSON.stringify({
@@ -187,7 +189,7 @@ describe('InlineModelSwitcher AMR row', () => {
       ),
     ));
 
-    renderSwitcher({
+    const { onAgentModelChange } = renderSwitcher({
       agentModels: { amr: { model: 'gpt-5.4-mini', reasoning: 'default' } },
     });
 
@@ -202,6 +204,12 @@ describe('InlineModelSwitcher AMR row', () => {
       'default',
       'amr-cloud-latest',
     ]);
+    await waitFor(() => {
+      expect(onAgentModelChange).toHaveBeenCalledWith('amr', {
+        model: 'default',
+        reasoning: 'default',
+      });
+    });
   });
 
   it('shows icon-only signed-in status instead of account information in the AMR button', async () => {

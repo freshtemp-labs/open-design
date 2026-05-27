@@ -29,6 +29,7 @@ import {
   amrLoginStatusEventReason,
   notifyAmrLoginStatusChanged,
 } from './amrLoginPolling';
+import { normalizeAgentModelChoice } from './agentModelSelection';
 import { renderModelOptions } from './modelOptions';
 
 interface Props {
@@ -292,6 +293,13 @@ export function InlineModelSwitcher({
 
   const currentChoice =
     (config.agentId && config.agentModels?.[config.agentId]) || {};
+  const normalizedCurrentChoice = normalizeAgentModelChoice(
+    currentAgent,
+    currentChoice,
+  );
+  const currentAgentId = currentAgent?.id ?? null;
+  const normalizedCurrentModelId = normalizedCurrentChoice?.model ?? null;
+  const normalizedCurrentReasoning = normalizedCurrentChoice?.reasoning;
   const currentAgentModelIds = currentAgent?.models?.map((m) => m.id) ?? [];
   const configuredModelId =
     typeof currentChoice.model === 'string' && currentChoice.model
@@ -303,6 +311,20 @@ export function InlineModelSwitcher({
     !currentAgentModelIds.includes(configuredModelId)
       ? currentAgent?.models?.[0]?.id ?? null
       : configuredModelId ?? currentAgent?.models?.[0]?.id ?? null;
+
+  useEffect(() => {
+    if (!currentAgentId || !normalizedCurrentModelId) return;
+    onAgentModelChange(currentAgentId, {
+      model: normalizedCurrentModelId,
+      reasoning: normalizedCurrentReasoning,
+    });
+  }, [
+    currentAgentId,
+    normalizedCurrentModelId,
+    normalizedCurrentReasoning,
+    onAgentModelChange,
+  ]);
+
   const currentModelLabel =
     currentAgent?.models?.find((m) => m.id === currentModelId)?.label ?? null;
   const amrLoggedIn = amrStatus?.loggedIn === true;
