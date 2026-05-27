@@ -54,6 +54,51 @@ test('spawnEnvForAgent applies configured Codex env without mutating the base en
   assert.equal('CODEX_BIN' in base, false);
 });
 
+test('spawnEnvForAgent applies system proxy env to all agent runtimes before base env overrides', () => {
+  const env = spawnEnvForAgent(
+    'gemini',
+    {
+      HTTPS_PROXY: 'http://user-env:9000',
+      PATH: '/usr/bin',
+    },
+    {},
+    {
+      HTTP_PROXY: 'http://system-http:7890',
+      HTTPS_PROXY: 'http://system-https:7891',
+      ALL_PROXY: 'socks5://system-socks:1080',
+      NO_PROXY: '.local,localhost',
+      NODE_USE_ENV_PROXY: '1',
+    },
+  );
+
+  assert.equal(env.HTTP_PROXY, 'http://system-http:7890');
+  assert.equal(env.HTTPS_PROXY, 'http://user-env:9000');
+  assert.equal(env.ALL_PROXY, 'socks5://system-socks:1080');
+  assert.equal(env.NO_PROXY, '.local,localhost');
+  assert.equal(env.NODE_USE_ENV_PROXY, '1');
+  assert.equal(env.PATH, '/usr/bin');
+});
+
+test('spawnEnvForAgent lets explicit lowercase proxy env override system uppercase proxy env', () => {
+  const env = spawnEnvForAgent(
+    'gemini',
+    {
+      https_proxy: 'http://user-lowercase:9000',
+      PATH: '/usr/bin',
+    },
+    {},
+    {
+      HTTPS_PROXY: 'http://system-uppercase:7891',
+      NODE_USE_ENV_PROXY: '1',
+    },
+  );
+
+  assert.equal(env.HTTPS_PROXY, 'http://user-lowercase:9000');
+  if (process.platform !== 'win32') {
+    assert.equal(env.https_proxy, 'http://user-lowercase:9000');
+  }
+});
+
 test('spawnEnvForAgent expands configured env home paths', () => {
   const env = spawnEnvForAgent('codex', { PATH: '/usr/bin' }, {
     CODEX_HOME: '~/.codex-alt',

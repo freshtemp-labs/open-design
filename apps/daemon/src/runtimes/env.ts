@@ -1,3 +1,4 @@
+import { mergeProxyAwareEnv, resolveSystemProxyEnvCached } from '@open-design/platform';
 import { expandConfiguredEnv } from './paths.js';
 
 type RuntimeEnvMap = NodeJS.ProcessEnv | Record<string, string>;
@@ -32,11 +33,14 @@ export function spawnEnvForAgent(
   agentId: string,
   baseEnv: RuntimeEnvMap,
   configuredEnv: unknown = {},
+  systemProxyEnv: RuntimeEnvMap = resolveSystemProxyEnvCached(),
 ): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {
-    ...baseEnv,
-    ...expandConfiguredEnv(configuredEnv),
-  };
+  const env = mergeProxyAwareEnv(
+    process.platform,
+    systemProxyEnv,
+    baseEnv,
+    expandConfiguredEnv(configuredEnv),
+  );
   if (agentId === 'claude') {
     stripUnlessCustomBaseUrl(env, 'ANTHROPIC_BASE_URL', ['ANTHROPIC_API_KEY']);
     return env;
