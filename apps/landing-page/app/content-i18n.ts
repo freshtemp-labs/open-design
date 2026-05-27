@@ -711,6 +711,32 @@ export function localizeContentTag(
   return localizeTaxonomyValue(value, locale) ?? copyFor(locale)?.unknownTag;
 }
 
+/*
+ * Mixed-language guard used by every `localizeXxxText` helper below.
+ *
+ * The legacy fallback templates for craft / template / system / plugin /
+ * blog are Chinese / Japanese / Korean sentences that splice an English
+ * `name` into themselves: ``${name}工艺规则`` produces "Editorial
+ * typography hierarchy 工艺规则" when the source material is still in
+ * English. That mid-sentence script switch reads as broken on
+ * `/zh/...`, `/zh-tw/...`, `/ja/...`, `/ko/...` even when chrome around
+ * it is fully localized.
+ *
+ * Until the source-of-truth (SKILL.md frontmatter, design-system /
+ * craft markdown) ships per-locale `name` fields, the cleaner UX is to
+ * render the section in English on a CJK locale: chrome stays in the
+ * visitor's language, the body reads like an untranslated source
+ * snippet (which is what it actually is), and the awkward script
+ * straddling goes away.
+ */
+const CJK_CHAR_RE = /[぀-ゟ゠-ヿㇰ-ㇿ가-힯一-鿿豈-﫿]/;
+const CJK_LOCALES = new Set<LandingLocaleCode>(['zh', 'zh-tw', 'ja', 'ko']);
+
+function nameNeedsEnglishFallback(name: string, locale: LandingLocaleCode): boolean {
+  if (!CJK_LOCALES.has(locale)) return false;
+  return !CJK_CHAR_RE.test(name);
+}
+
 export function localizeSkillDescription(args: {
   name: string;
   mode?: string;
@@ -721,6 +747,7 @@ export function localizeSkillDescription(args: {
 }): string {
   const copy = copyFor(args.locale);
   if (!copy) return args.fallback;
+  if (nameNeedsEnglishFallback(args.name, args.locale)) return args.fallback;
   const labels = [args.mode, args.scenario, args.category]
     .map((value) => localizeTaxonomyValue(value, args.locale))
     .filter((value): value is string => Boolean(value));
@@ -737,6 +764,13 @@ export function localizeSystemText(args: {
 }): { category: string; tagline: string; atmosphere: string } {
   const copy = copyFor(args.locale);
   if (!copy) {
+    return {
+      category: args.category,
+      tagline: args.fallbackTagline,
+      atmosphere: args.fallbackAtmosphere,
+    };
+  }
+  if (nameNeedsEnglishFallback(args.name, args.locale)) {
     return {
       category: args.category,
       tagline: args.fallbackTagline,
@@ -760,6 +794,9 @@ export function localizeCraftText(args: {
   const copy = copyFor(args.locale);
   if (!copy) return { name: args.name, summary: args.summary };
   const baseName = CRAFT_LABELS[args.slug]?.[args.locale] ?? args.name;
+  if (nameNeedsEnglishFallback(baseName, args.locale)) {
+    return { name: args.name, summary: args.summary };
+  }
   return {
     name: copy.craftName(baseName),
     summary: copy.craftSummary(baseName),
@@ -773,6 +810,9 @@ export function localizeTemplateText(args: {
 }): { name: string; summary: string } {
   const copy = copyFor(args.locale);
   if (!copy) return { name: args.name, summary: args.summary };
+  if (nameNeedsEnglishFallback(args.name, args.locale)) {
+    return { name: args.name, summary: args.summary };
+  }
   return {
     name: copy.templateName(args.name),
     summary: copy.templateSummary(args.name),
@@ -792,6 +832,13 @@ export function localizePluginText(args: {
 }): { title: string; description: string; exampleQuery: string | undefined } {
   const copy = copyFor(args.locale);
   if (!copy) {
+    return {
+      title: args.title,
+      description: args.description,
+      exampleQuery: undefined,
+    };
+  }
+  if (nameNeedsEnglishFallback(args.title, args.locale)) {
     return {
       title: args.title,
       description: args.description,
@@ -827,7 +874,20 @@ export function localizeBlogPostText(args: {
       bodyHtml: undefined,
     };
   }
+  // Blog posts go through `localizedBlogTopic`, which has its own per-id
+  // translation table; if the topic isn't there the helper returns the raw
+  // English title — wrapping that in a Chinese sentence template ("Open
+  // Design 指南：BYOK reality check") would mix scripts the same way craft
+  // / template / system do. Same guard applies.
   const topic = localizedBlogTopic(args.id, args.locale);
+  if (nameNeedsEnglishFallback(topic, args.locale)) {
+    return {
+      title: args.title,
+      summary: args.summary,
+      category: args.category,
+      bodyHtml: undefined,
+    };
+  }
   const title = copy.blogTitle(topic);
   const summary = copy.blogSummary(topic);
   return {
