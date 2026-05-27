@@ -33,7 +33,7 @@ export function spawnEnvForAgent(
   agentId: string,
   baseEnv: RuntimeEnvMap,
   configuredEnv: unknown = {},
-  systemProxyEnv: RuntimeEnvMap = resolveSystemProxyEnvCached(),
+  systemProxyEnv: RuntimeEnvMap = resolveSystemProxyEnvCached({ refresh: true }),
 ): NodeJS.ProcessEnv {
   const env = mergeProxyAwareEnv(
     process.platform,

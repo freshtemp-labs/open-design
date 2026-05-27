@@ -1,6 +1,7 @@
 import { symlinkSync } from 'node:fs';
-import { test } from 'vitest';
+import { test, vi } from 'vitest';
 import { homedir } from 'node:os';
+import * as platform from '@open-design/platform';
 import {
   assert, chmodSync, detectAgents, inspectAgentExecutableResolution, join, minimalAgentDef, mkdirSync, mkdtempSync, opencode, resolveAgentExecutable, rmSync, spawnEnvForAgent, tmpdir, withEnvSnapshot, withPlatform, writeFileSync,
 } from './helpers/test-helpers.js';
@@ -77,6 +78,23 @@ test('spawnEnvForAgent applies system proxy env to all agent runtimes before bas
   assert.equal(env.NO_PROXY, '.local,localhost');
   assert.equal(env.NODE_USE_ENV_PROXY, '1');
   assert.equal(env.PATH, '/usr/bin');
+});
+
+test('spawnEnvForAgent refreshes system proxy env for each default agent launch', () => {
+  const proxySpy = vi.spyOn(platform, 'resolveSystemProxyEnvCached').mockReturnValue({
+    HTTPS_PROXY: 'http://system-https:7891',
+    NODE_USE_ENV_PROXY: '1',
+  });
+
+  try {
+    const env = spawnEnvForAgent('gemini', { PATH: '/usr/bin' });
+
+    assert.deepEqual(proxySpy.mock.calls, [[{ refresh: true }]]);
+    assert.equal(env.HTTPS_PROXY, 'http://system-https:7891');
+    assert.equal(env.PATH, '/usr/bin');
+  } finally {
+    proxySpy.mockRestore();
+  }
 });
 
 test('spawnEnvForAgent lets explicit lowercase proxy env override system uppercase proxy env', () => {
