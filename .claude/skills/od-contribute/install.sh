@@ -60,9 +60,40 @@ CMD_SRC="$TMPDIR/${TARBALL_ROOT}/.claude/commands/od-contribute.md"
 
 install_skill_to() {
   local dest="$1" label="$2"
+
+  # Preserve user-local state across reinstall/upgrade. Re-running this script
+  # is the documented upgrade path ("re-run to pull the latest skill from
+  # main"), so anything the user wrote here that ISN'T part of the skill
+  # itself must survive `rm -rf`. Today that's just `.gh-token` (sandboxed
+  # agents like Codex.app / Cursor write a GitHub token here when they can't
+  # reach the macOS keychain — see check-prereqs.sh's hint and config.sh's
+  # fallback). Add new state filenames to PRESERVE if we ever introduce more.
+  local PRESERVE=(.gh-token)
+  local stash=""
+  local f
+  for f in "${PRESERVE[@]}"; do
+    if [[ -f "$dest/$f" ]]; then
+      [[ -z "$stash" ]] && stash="$(mktemp -d)"
+      cp -p "$dest/$f" "$stash/$f"
+    fi
+  done
+
   rm -rf "$dest"
   mkdir -p "$dest"
   cp -R "$SKILL_SRC/." "$dest/"
+
+  # Restore preserved state. The mode preservation (`cp -p` above + this
+  # explicit chmod) keeps tokens at 600.
+  if [[ -n "$stash" ]]; then
+    for f in "${PRESERVE[@]}"; do
+      if [[ -f "$stash/$f" ]]; then
+        cp -p "$stash/$f" "$dest/$f"
+        chmod 600 "$dest/$f" 2>/dev/null || true
+      fi
+    done
+    rm -rf "$stash"
+  fi
+
   # Ensure scripts retain executable bit (tar usually preserves; defense in depth).
   find "$dest" -name '*.sh' -exec chmod +x {} + 2>/dev/null || true
   green "  ✓ $label"
