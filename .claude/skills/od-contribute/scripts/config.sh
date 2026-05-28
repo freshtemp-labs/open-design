@@ -18,6 +18,21 @@ TARGET_REPO="$OD_TARGET_REPO"
 : "${OD_WORK_ROOT:="$HOME/od-contrib-work"}"
 : "${OD_DISCORD_INVITE:=https://discord.gg/qhbcCH8Am4}"
 
+# Sandboxed-agent fallback for gh auth.
+# Codex.app, Cursor, and other macOS App Sandbox runtimes can't reach the
+# system keychain where `gh auth login` stores the token by default. If
+# GH_TOKEN isn't already set in the env, look for a token file shipped
+# alongside the skill. The skill never *creates* this file automatically —
+# it must be written by either:
+#   - a one-time `gh auth token > <skill>/.gh-token` from a non-sandboxed shell, or
+#   - the OAuth Device Flow bootstrap (TODO: implement for non-coder users).
+_OD_SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ -z "${GH_TOKEN:-}" && -f "$_OD_SKILL_DIR/.gh-token" ]]; then
+  GH_TOKEN="$(tr -d '[:space:]' < "$_OD_SKILL_DIR/.gh-token")"
+  export GH_TOKEN
+fi
+unset _OD_SKILL_DIR
+
 export TARGET_REPO TARGET_FORK OD_BASE_BRANCH OD_WORK_ROOT OD_DISCORD_INVITE
 
 od::log()  { printf '[od-contrib] %s\n' "$*" >&2; }

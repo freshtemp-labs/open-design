@@ -8,6 +8,10 @@ set -uo pipefail
 # shellcheck disable=SC1091
 source "$(dirname "$0")/config.sh"
 
+# Skill root, used in the auth-failure hint below to tell the user where to
+# drop a .gh-token file if they're stuck in a sandboxed agent.
+_OD_SKILL_DIR_HINT="$(cd "$(dirname "$0")/.." && pwd)"
+
 STATUS=0
 MISSING=()
 HINTS=()
@@ -46,17 +50,36 @@ if ((${#MISSING[@]} > 0)); then
   exit 2
 fi
 
-if ! gh auth status >/dev/null 2>&1; then
-  cat >&2 <<'EOF'
+# Two acceptable auth paths:
+#   1. `gh auth status` succeeds (gh has a token in keychain or hosts.yml)
+#   2. GH_TOKEN env var is set (config.sh loaded it from .gh-token, or caller exported it)
+# Path 2 matters for sandboxed runtimes (Codex.app, Cursor, etc.) where gh
+# CAN'T reach macOS keychain due to App Sandbox restrictions.
+if [[ -n "${GH_TOKEN:-}" ]]; then
+  # Verify the token actually works against the API.
+  if ! gh api user --jq .login >/dev/null 2>&1; then
+    printf '[od-contrib][error] GH_TOKEN is set but gh api call failed (token expired?).\n' >&2
+    printf '[od-contrib][error] Refresh the token: from a terminal run  gh auth refresh  or replace the .gh-token file.\n' >&2
+    exit 2
+  fi
+elif ! gh auth status >/dev/null 2>&1; then
+  cat >&2 <<EOF
 
-[od-contrib][error] gh is installed but not authenticated.
+[od-contrib][error] No GitHub credentials available.
 
-Run this in a terminal, then retry:
+Two ways to fix this:
 
-  gh auth login
+  Option A (one-time, works for any agent):
+    From a regular terminal, run:
+      gh auth login
+    Pick GitHub.com → HTTPS → browser login. Need 'repo' scope.
 
-Pick: GitHub.com → HTTPS → authenticate via browser.
-You need at least `repo` scope to open pull requests, and `read:org` is harmless to add.
+  Option B (for sandboxed agents like Codex.app / Cursor that can't reach
+  the macOS keychain):
+    From a regular terminal where gh IS authenticated, run:
+      gh auth token > "$_OD_SKILL_DIR_HINT/.gh-token"
+      chmod 600 "$_OD_SKILL_DIR_HINT/.gh-token"
+    The skill will pick up the token automatically next run.
 EOF
   exit 2
 fi
