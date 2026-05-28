@@ -153,10 +153,12 @@ git -C "$WORKDIR" branch -m "od-contrib/i18n/<doc>-<lang>-<date>"
 
 Write the result to `$WORKDIR/<TRANSLATED_PATH>` (e.g. `QUICKSTART.es.md`). Show user a unified diff vs. the English source for visual sanity-check (line-count delta within ±15% is a healthy signal).
 
-**3b.6** Validate:
+**3b.6** Validate the translated file against the English source. The `--reference` flag tells the validator to ignore relative refs that were already broken in the source — OD docs frequently link to website route slugs (e.g. `skills/blog-post/`) that aren't files on disk; we don't want a structure-preserving translation to fail because of pre-existing dead refs.
 
 ```bash
-bash "$SKILL_DIR/scripts/validate-markdown.sh" "$WORKDIR/<TRANSLATED_PATH>"
+bash "$SKILL_DIR/scripts/validate-markdown.sh" \
+  "$WORKDIR/<TRANSLATED_PATH>" \
+  --reference "$WORKDIR/<ENGLISH_PATH>"
 ```
 
 If FAIL → surface verbatim, fix, retry.
@@ -198,10 +200,18 @@ ls "$WORKDIR/docs" 2>/dev/null
 
 If a `docs/blog/` or similar exists, place the new post there. If not, ask the user where it should live, defaulting to `docs/<slug>.md`. Generate an outline → user fills in user-specific bits (their use case, screenshots, the prompt they used, the rendered output) → agent stitches into a final Markdown.
 
-**3c.6** Validate every changed/added file:
+**3c.6** Validate every changed/added file. For files that already exist in the repo (typo fix, dead-link fix, doc edit), pass `--reference` pointing at HEAD's version so we only fail on relative refs the user *introduced*, not on pre-existing route slugs:
 
 ```bash
-bash "$SKILL_DIR/scripts/validate-markdown.sh" "$WORKDIR/<changed-path>" ...
+# For modifications to existing files:
+git -C "$WORKDIR" show "HEAD:<path>" > "/tmp/od-contrib-orig-<basename>" 2>/dev/null
+bash "$SKILL_DIR/scripts/validate-markdown.sh" \
+  "$WORKDIR/<changed-path>" \
+  --reference "/tmp/od-contrib-orig-<basename>"
+
+# For brand-new files (e.g. a blog post the user is creating from scratch),
+# omit --reference. The validator will skip the relative-ref check entirely
+# (since it can't tell route slugs from real paths in isolation).
 ```
 
 **3c.7** Render `templates/PR-BODY-docs.md` with `{{ONE_LINE_SUMMARY}}`, `{{DETAILS}}`, `{{FILES_LIST}}`, `{{DISCORD_INVITE}}`.

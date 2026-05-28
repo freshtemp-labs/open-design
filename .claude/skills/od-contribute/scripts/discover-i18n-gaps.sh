@@ -64,14 +64,23 @@ for english in "${ENGLISH_DOCS[@]}"; do
   doc="${english%.md}"
   en_epoch="$(last_commit_epoch "$english")"
 
-  # First, scan disk for existing translations of this doc — those get a "stale-or-fresh" check.
-  declare -A SEEN_LANG=()
+  # Track observed languages for this doc as a newline-delimited string.
+  # Avoids `declare -A` (associative arrays), which requires Bash 4 — macOS
+  # ships with Bash 3.2 by default and most agent-spawned bash subprocesses
+  # inherit that. The leading + trailing newlines let us match `\n<lang>\n`
+  # without false positives on prefix overlap (e.g. zh vs zh-CN).
+  SEEN_LANGS=$'\n'
+
   while IFS= read -r -d '' translated; do
-    # Filename pattern: <DOC>.<lang>.md (e.g. README.zh-CN.md).
-    lang_part="${translated#${doc}.}"
+    # Filename pattern: <DOC>.<lang>.md  (e.g. README.zh-CN.md).
+    # `find . ... -print0` emits paths with a leading `./`; strip that first
+    # and operate on the basename so the prefix-strip below works regardless.
+    base="${translated#./}"
+    base="$(basename "$base")"
+    lang_part="${base#${doc}.}"
     lang_part="${lang_part%.md}"
-    [[ -z "$lang_part" || "$lang_part" == "$translated" ]] && continue
-    SEEN_LANG[$lang_part]=1
+    [[ -z "$lang_part" || "$lang_part" == "$base" ]] && continue
+    SEEN_LANGS+="${lang_part}"$'\n'
 
     tr_epoch="$(last_commit_epoch "$translated")"
     if [[ -z "$tr_epoch" ]]; then
@@ -87,9 +96,9 @@ for english in "${ENGLISH_DOCS[@]}"; do
 
   # Then, for each language in LANGS that we didn't see, emit a "missing" row.
   for lang in "${LANGS[@]}"; do
-    [[ -n "${SEEN_LANG[$lang]+x}" ]] && continue
+    case "$SEEN_LANGS" in
+      *$'\n'"$lang"$'\n'*) continue ;;
+    esac
     emit "$doc" "$english" "$lang" "" "missing" "$en_epoch" "" ""
   done
-
-  unset SEEN_LANG
 done
