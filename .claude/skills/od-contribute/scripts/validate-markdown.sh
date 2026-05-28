@@ -86,39 +86,66 @@ check_file() {
     fail=1
   fi
 
-  # Relative refs — only check when --reference was supplied. Without it we
-  # can't tell route slugs from real paths, and OD docs use both freely.
-  if [[ -n "$REFERENCE" ]]; then
-    local dir rel_bad=0 rel_excused=0
-    dir="$(cd "$(dirname "$f")" && pwd -P)"
-    while IFS= read -r ref; do
-      [[ -z "$ref" ]] && continue
-      case "$ref" in http*|mailto:*|\#*|/*) continue ;; esac
-      target="${ref%%#*}"; target="${target%%\?*}"
-      [[ -z "$target" ]] && continue
-      if [[ ! -e "$dir/$target" ]]; then
-        # Is this ref already broken in the reference (source) file?
-        case "$KNOWN_DEAD" in
-          *$'\n'"$ref"$'\n'*) rel_excused=$((rel_excused+1)) ;;
-          *)
-            printf 'FAIL  broken relative reference: %s\n' "$ref"
-            rel_bad=$((rel_bad+1))
-            fail=1
-            ;;
-        esac
-      fi
-    done < <(grep -oE '\!?\[[^]]*\]\([^)]+\)' "$f" 2>/dev/null \
-             | sed -E 's/.*\(([^)]+)\).*/\1/' \
-             | sort -u)
-    if (( rel_bad == 0 )); then
-      if (( rel_excused > 0 )); then
-        printf 'PASS  no NEW broken relative refs (%d already dead in source — kept as-is)\n' "$rel_excused"
-      else
-        printf 'PASS  all relative references resolve\n'
-      fi
+  # Relative refs — tiered check:
+  #
+  #   Image refs (![alt](path)) — always validate. No website route uses
+  #   image-syntax markdown; if it doesn't resolve on disk, it's broken.
+  #
+  #   Link refs starting with ./ or ../ — always validate. Explicit relative
+  #   paths are unambiguously file references, not router slugs.
+  #
+  #   Other link refs (e.g. `skills/blog-post/`) — only validated when
+  #   --reference is supplied (we excuse refs already broken in the source).
+  #   Without --reference we skip these because OD docs use slug-style refs
+  #   for website routes that don't resolve to files in the checkout.
+  #
+  # In all cases, refs already broken in --reference (when supplied) are
+  # excused from failure rather than reported as regressions.
+  local dir rel_bad=0 rel_excused=0 rel_skipped_ambiguous=0
+  dir="$(cd "$(dirname "$f")" && pwd -P)"
+  while IFS= read -r entry; do
+    [[ -z "$entry" ]] && continue
+    # `!?` in grep keeps the leading `!` for image refs; case-detect here.
+    is_img=0
+    case "$entry" in '!'*) is_img=1 ;; esac
+    # Extract URL: between first `(` and last `)`.
+    ref="${entry#*\(}"
+    ref="${ref%\)*}"
+    case "$ref" in http*|mailto:*|\#*|/*) continue ;; esac
+    target="${ref%%#*}"; target="${target%%\?*}"
+    [[ -z "$target" ]] && continue
+
+    # Should we validate this ref?
+    if (( is_img == 0 )); then
+      case "$ref" in
+        ./*|../*) ;;  # explicit relative — always validate
+        *)
+          # Slug-style; only validate when we have a reference to compare against.
+          if [[ -z "$REFERENCE" ]]; then
+            rel_skipped_ambiguous=$((rel_skipped_ambiguous+1))
+            continue
+          fi
+          ;;
+      esac
     fi
-  else
-    printf 'SKIP  relative-ref check (no --reference; OD docs mix file paths and route slugs)\n'
+
+    if [[ ! -e "$dir/$target" ]]; then
+      case "$KNOWN_DEAD" in
+        *$'\n'"$ref"$'\n'*) rel_excused=$((rel_excused+1)) ;;
+        *)
+          printf 'FAIL  broken relative reference: %s\n' "$ref"
+          rel_bad=$((rel_bad+1))
+          fail=1
+          ;;
+      esac
+    fi
+  done < <(grep -oE '!?\[[^]]*\]\([^)]+\)' "$f" 2>/dev/null | sort -u)
+
+  if (( rel_bad == 0 )); then
+    msg="PASS  relative refs OK"
+    (( rel_excused > 0 )) && msg+=" (${rel_excused} pre-existing dead refs kept as-is)"
+    (( rel_skipped_ambiguous > 0 )) && msg+=" (${rel_skipped_ambiguous} slug-style refs skipped — pass --reference to check)"
+    printf '%s\n' "$msg"
   fi
 
   # External link health (best-effort).

@@ -33,14 +33,24 @@ last_commit_epoch() {
 }
 
 commits_between() {
-  # How many commits touched $1 after the last commit on $2.
+  # How many commits touched $newer that are NOT ancestors of $older_ref's tip
+  # commit. Uses commit ancestry rather than `--since=<epoch>` math because
+  # `--since` is inclusive of the boundary epoch — so when English source and
+  # translation are touched in the SAME commit (very common: bulk i18n
+  # refresh, structural change applied across all translations), `--since`
+  # would count that shared commit and mark the translation "stale" by 1.
+  #
+  # `tr_sha..HEAD -- $newer` reads as: "commits reachable from HEAD but not
+  # from tr_sha, that touched $newer". When tr_sha is HEAD's tip for $newer
+  # too (same-commit update), the answer is correctly 0.
   local newer="$1" older_ref="$2"
-  local since
-  since="$(last_commit_epoch "$older_ref")"
-  if [[ -z "$since" ]]; then
-    git log --format=%H -- "$newer" | wc -l | tr -d ' '
+  local tr_sha
+  tr_sha="$(git log -1 --format=%H -- "$older_ref" 2>/dev/null)"
+  if [[ -z "$tr_sha" ]]; then
+    # Translation never committed; count all history of $newer.
+    git log --format=%H -- "$newer" 2>/dev/null | wc -l | tr -d ' '
   else
-    git log --since="@$since" --format=%H -- "$newer" | wc -l | tr -d ' '
+    git rev-list "${tr_sha}..HEAD" -- "$newer" 2>/dev/null | wc -l | tr -d ' '
   fi
 }
 
