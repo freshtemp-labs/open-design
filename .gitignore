@@ -54,11 +54,6 @@ tsconfig.tsbuildinfo
 .codex/
 .deepseek/
 
-# Build output of tools/od-contribute-installer/build-zip.sh — distributed
-# via GitHub Releases, not committed.
-tools/od-contribute-installer/od-contribute-installer.zip
-tools/od-contribute-installer/skill-payload/
-
 # Commander task scratchpad; keep local task notes out of git by default.
 .task/
 task.md
