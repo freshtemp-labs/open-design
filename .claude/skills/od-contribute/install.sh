@@ -7,7 +7,7 @@
 #
 # 1) Tell your AI agent (Claude Code / Codex / Cursor / etc.) in the chat:
 #
-#      curl -sSL https://raw.githubusercontent.com/nexu-io/open-design/main/tools/install-od-contribute.sh | bash
+#      curl -sSL https://raw.githubusercontent.com/nexu-io/open-design/main/.claude/skills/od-contribute/install.sh | bash
 #
 #    The agent's Bash tool runs this. You never open a terminal yourself.
 #
