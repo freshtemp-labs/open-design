@@ -1,6 +1,6 @@
 ---
 name: od-contribute
-description: One-click contribution flow for Open Design (nexu-io/open-design) — even for non-coders. Pick one of four cards (ship a Skill or Design System you made with OD; translate docs; fix a typo / write a blog; report a bug), the agent validates and opens a PR (or issue) for you. Trigger words 给 OD 投个 skill, contribute to open design, ship my OD design system, 翻译 OD 文档, OD 报 bug, od-contribute.
+description: One-click contribution flow for Open Design (nexu-io/open-design) — even for non-coders. Pick one of four cards (ship a Skill or Design System you made with OD; translate docs; fix a typo / write a blog; report a bug), the agent validates and opens a PR (or issue) for you. Trigger words contribute to open design, ship my OD skill, ship my OD design system, translate OD docs, report an OD bug, od-contribute.
 allowed-tools:
   - Bash
   - Read
@@ -15,6 +15,12 @@ allowed-tools:
 # od-contribute — first-contribution flow for Open Design
 
 Locked to `nexu-io/open-design`. Branches by **contribution type**, not by issue. Replaces the dev-loop with type-specific no-code validators. Designed so a product user with zero coding background can ship a real PR.
+
+## Language
+
+Mirror the user's language in every user-facing message — `AskUserQuestion` labels and descriptions, status updates, error explanations. Detect from their first message; when uncertain, default to English.
+
+**Generated artifacts (PR titles, commit messages, PR/issue body files, branch names) MUST be English** regardless of the user's chat language. GitHub conventions, maintainer review, and search all assume English. The templates under `templates/` are already English — keep them that way when rendering.
 
 Scripts live under `scripts/`. Source the shared helpers from any script:
 
@@ -39,12 +45,12 @@ If `gh repo view "$TARGET_FORK"` fails, ask the user (one `AskUserQuestion`) whe
 
 ## Step 2 — Pick contribution type
 
-Single `AskUserQuestion` (header: "我要做的事", multiSelect: false), four options:
+Single `AskUserQuestion` (header: "Contribution", multiSelect: false), four options. Translate option labels/descriptions into the user's chat language; the branch routing is unchanged.
 
-1. **🎨 投个我用 OD 做的东西** — _Skill / Design System / 模板,我已经做出来了想贡献回去_ → branch `3a`
-2. **🌍 翻译 OD 文档** — _README / QUICKSTART / CONTRIBUTING 翻译到我的母语_ → branch `3b`
-3. **📝 改文档 / 写博客 / 修 typo** — _改文档错别字、修死链、写一篇 use-case 博客_ → branch `3c`
-4. **🐛 报一个 bug** — _OD 用着用着出问题了,帮我把它整理成清晰的 issue_ → branch `3d` (issue path, no PR)
+1. **🎨 Ship something I made with OD** — _a Skill, Design System, HyperFrame, or template I want to contribute upstream_ → branch `3a`
+2. **🌍 Translate OD docs** — _README / QUICKSTART / CONTRIBUTING into a new language_ → branch `3b`
+3. **📝 Fix docs / write a blog / fix a typo** — _typo fix, dead link, use-case writeup_ → branch `3c`
+4. **🐛 Report a bug** — _something broke; I'll help turn it into a high-quality issue_ → branch `3d` (issue path, no PR)
 
 Each branch below is self-contained. Steps 7–8 (preview + push) are shared across branches `3a`/`3b`/`3c`. Branch `3d` skips them entirely.
 
@@ -52,7 +58,7 @@ Each branch below is self-contained. Steps 7–8 (preview + push) are shared acr
 
 ### Step 3a — OD product submission (Skill / Design System)
 
-**3a.1** Ask user: "你要投的产物的本地路径是?" (single free-text). Common: a folder path (Skill) or a single `DESIGN.md` file (Design System).
+**3a.1** Ask user: "What's the local path to the artifact you want to ship?" (single free-text, translated into the user's chat language). Common: a folder path (Skill) or a single `DESIGN.md` file (Design System).
 
 **3a.2** Sniff type:
 
@@ -90,10 +96,10 @@ bash "$SKILL_DIR/scripts/validate-design-system.sh" \
 
 If validation fails, surface the FAIL lines verbatim, ask the user to fix, retry. **Never push a failing artifact.**
 
-**3a.6** Ask 3 short questions via `AskUserQuestion`:
-- 你叫什么 (PR 里署名用): free-text
-- 一句话介绍这个 skill / design system: free-text
-- 截图本地路径 (可选): free-text
+**3a.6** Ask 3 short questions via `AskUserQuestion` (translate the labels into the user's chat language):
+- "What name should we credit you under in the PR?" — free-text
+- "One-line pitch for this Skill / Design System?" — free-text
+- "Path to a screenshot (optional)?" — free-text
 
 **3a.7** Render `templates/PR-BODY-skill.md` (or `PR-BODY-design-system.md`) with substitutions:
 - `{{SKILL_NAME}}`, `{{SKILL_SLUG}}` (or `{{BRAND_NAME}}`, `{{BRAND_SLUG}}`)
@@ -129,7 +135,7 @@ Each line is JSON. Rank by:
 - then `status: "stale"` ordered by `english_commits_since_translation` desc
 - README family before QUICKSTART before CONTRIBUTING
 
-**3b.3** Take the top 3–4 gaps and present via `AskUserQuestion` (header: "翻译目标"). Each option label like: `README → 한국어 (목포)` / `QUICKSTART (zh-CN) refresh — 12 commits behind`.
+**3b.3** Take the top 3–4 gaps and present via `AskUserQuestion` (header: "Translation target"). Each option label like: `README → 한국어 (Korean)` / `QUICKSTART (zh-CN) refresh — 12 commits behind`. Translate the header text into the user's chat language but keep the option labels descriptive (the language names belong in their native script).
 
 **3b.4** Once user picks, **rename branch** to be specific:
 ```bash
@@ -218,13 +224,15 @@ If the schema has drifted from the template (`templates/ISSUE-BODY-bug.md`), reg
 
 | Bug-report field | Prompt to user |
 |---|---|
-| `description` | "出了什么问题?用一句话告诉我。" |
-| `steps` | "怎么复现?一步一步告诉我。" |
-| `expected` | "你以为会发生什么?" |
-| `version` | "你装的 OD 版本号是多少?(About 菜单或 `od --version`)" |
+| `description` | "What went wrong? One sentence is fine." |
+| `steps` | "How can I reproduce it? Walk me through step by step." |
+| `expected` | "What did you expect to happen?" |
+| `version` | "Which OD version are you running? (About menu, or `od --version`)" |
 | `platform` | dropdown: macOS (Apple Silicon) / macOS (Intel) / Windows / Linux / Other |
-| `logs` | "有错误日志贴一段就行,没有也没关系。" |
-| `screenshots` | "截图本地路径,没有就跳过。" |
+| `logs` | "Any error logs you can paste? Skip if you don't have them." |
+| `screenshots` | "Path to a screenshot? Skip if you don't have one." |
+
+Translate every prompt above into the user's chat language at runtime.
 
 **3d.3** Auto-collect what we can (these don't need to ask the user):
 - OS family from `uname`
@@ -236,7 +244,7 @@ If the schema has drifted from the template (`templates/ISSUE-BODY-bug.md`), reg
 gh search issues "<keywords>" --repo "$TARGET_REPO" --state open --limit 5 --json number,title,url
 ```
 
-If matches exist, present them to the user via `AskUserQuestion`: "已有这些 issue 看起来相关。你想 (a) 在已有的下面留 comment,(b) 仍然开新 issue,(c) 取消?"
+If matches exist, present them to the user via `AskUserQuestion` (translate to user's language): "These existing issues look related. Do you want to: (a) comment on an existing one, (b) open a new issue anyway, (c) cancel?"
 
 **3d.5** If proceeding with new issue, render `templates/ISSUE-BODY-bug.md` and submit:
 
@@ -267,9 +275,12 @@ About to commit:
 
 Then `git -C "$WORKDIR" diff --stat` and a `head -40` of the rendered PR body for visual sanity.
 
-Required `AskUserQuestion` confirmation: **"Push 这个 PR 吗?"** with options 直接发 / 我想再改一下 / 取消。
+Required `AskUserQuestion` confirmation (translate to user's language): **"Push this PR?"** with three options:
+- **Ship it** — proceed to Step 8
+- **Let me revise** — return to the relevant Step 3 sub-step
+- **Cancel** — leave the workspace on disk, tell the user the path so they can return later, exit
 
-If "再改一下" → return to the relevant Step 3 sub-step. If "取消" → leave the workspace on disk (so the user can come back), tell them where it is, exit.
+Never push without an explicit "Ship it".
 
 ## Step 8 — Push & open PR
 
