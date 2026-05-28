@@ -8,6 +8,13 @@ set -uo pipefail
 # shellcheck disable=SC1091
 source "$(dirname "$0")/config.sh"
 
+# config.sh runs with `set -e` for its own callers, but this script wants the
+# OPPOSITE behavior: continue checking all prereqs even when one fails so we
+# can surface the full diagnostic in one shot rather than aborting at the
+# first miss. Restore -uo pipefail without -e after sourcing.
+set +e
+set -uo pipefail
+
 # Skill root, used in the auth-failure hint below to tell the user where to
 # drop a .gh-token file if they're stuck in a sandboxed agent.
 _OD_SKILL_DIR_HINT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -84,7 +91,29 @@ EOF
   exit 2
 fi
 
-GH_USER="$(gh api user --jq .login 2>/dev/null || echo '?')"
+# Resolve the authenticated login. Fail closed if this can't be done — even
+# with `gh auth status` green, `gh api user` can fail when the token has
+# insufficient scopes, has been revoked, or GitHub is unreachable. Returning
+# a fabricated GH_USER like `?` would propagate to TARGET_FORK and cause
+# downstream pushes to point at `?/open-design`, so we'd rather stop here.
+GH_USER="$(gh api user --jq .login 2>/dev/null)"
+if [[ -z "$GH_USER" ]]; then
+  cat >&2 <<'EOF'
+
+[od-contrib][error] gh auth check passed but `gh api user` could not resolve a login.
+
+Common causes:
+  - The token has insufficient scopes (need at least 'repo')
+  - The token has been revoked or expired since the session started
+  - GitHub API is unreachable
+
+Refresh the token with the right scopes and retry:
+
+  gh auth refresh -s repo
+EOF
+  exit 2
+fi
+
 printf '  ✓ gh authed as %s\n' "$GH_USER" >&2
 printf '  ✓ target locked to %s\n' "$OD_TARGET_REPO" >&2
 

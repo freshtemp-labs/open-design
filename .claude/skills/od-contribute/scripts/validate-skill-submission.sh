@@ -31,6 +31,20 @@ fi
 pass "SKILL.md exists"
 
 # Frontmatter parse: extract YAML between the first two '---' lines.
+#
+# The opening fence MUST be on line 1 — both Claude Code's loader and Codex
+# CLI's loader (codex-rs/core-skills) parse the top of the file, so a SKILL.md
+# that starts with prose, a BOM, or whitespace and only contains a `---` block
+# later will load as having no frontmatter, even if this validator picks it up.
+# Reject leading content explicitly so the validator can't pass a file the
+# real loaders will reject.
+FIRST_LINE="$(head -n 1 "$SKILL_MD")"
+if [[ ! "$FIRST_LINE" =~ ^---[[:space:]]*$ ]]; then
+  fail "SKILL.md must start with a YAML frontmatter fence ('---') on line 1 — found: $(printf '%q' "$FIRST_LINE" | head -c 80)"
+  printf 'RESULT=%s\n' "fail"
+  exit 1
+fi
+
 FRONT=$(awk '
   BEGIN { in_fm=0; fence=0 }
   /^---[[:space:]]*$/ {
@@ -42,7 +56,7 @@ FRONT=$(awk '
 ' "$SKILL_MD")
 
 if [[ -z "$FRONT" ]]; then
-  fail "SKILL.md has no YAML frontmatter (--- ... --- block at the top)"
+  fail "SKILL.md has a leading '---' but no closing fence or empty frontmatter"
 else
   pass "SKILL.md frontmatter present"
 

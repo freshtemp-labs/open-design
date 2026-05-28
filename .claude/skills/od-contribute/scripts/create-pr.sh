@@ -45,10 +45,21 @@ case "$BRANCH" in
 esac
 
 # 1) Stage + commit if there are changes. Use a non-jargon commit message.
-if ! git diff --quiet || ! git diff --cached --quiet; then
+#
+# Use `git status --porcelain` rather than `git diff --quiet` because the latter
+# ignores untracked files. The most common contribution shape — a brand-new
+# Skill folder, translation file, or doc — is 100% untracked at this point;
+# any predicate that misses untracked paths would silently push an empty PR.
+if [[ -n "$(git status --porcelain)" ]]; then
   git add -A
-  git commit -m "$TITLE"
-  od::log "created commit"
+  # If even after `git add -A` the index is clean (e.g., changes were only in
+  # ignored paths or symlink mode bits), skip the commit instead of erroring.
+  if git diff --cached --quiet; then
+    od::log "no real changes after staging — skipping commit"
+  else
+    git commit -m "$TITLE"
+    od::log "created commit"
+  fi
 else
   od::log "nothing new to commit (assuming work was already committed)"
 fi
