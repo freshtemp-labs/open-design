@@ -120,11 +120,25 @@ check_file() {
       case "$ref" in
         ./*|../*) ;;  # explicit relative — always validate
         *)
-          # Slug-style; only validate when we have a reference to compare against.
-          if [[ -z "$REFERENCE" ]]; then
-            rel_skipped_ambiguous=$((rel_skipped_ambiguous+1))
-            continue
-          fi
+          # File-like targets (have an obvious file extension) are unambiguously
+          # on-disk references — `[doc](missing.md)` is not a website route, it
+          # is a sibling file. Validate without --reference. Otherwise (no
+          # extension, looks like a slug), only validate when we have a
+          # reference to compare against.
+          case "${target##*/}" in
+            *.md|*.markdown|*.mdx \
+            |*.png|*.jpg|*.jpeg|*.gif|*.webp|*.svg|*.ico|*.bmp \
+            |*.pdf|*.txt|*.json|*.yaml|*.yml|*.toml \
+            |*.sh|*.ts|*.tsx|*.js|*.jsx|*.css|*.html|*.xml \
+            |*.csv|*.zip|*.gz)
+              ;;  # file-like — always validate
+            *)
+              if [[ -z "$REFERENCE" ]]; then
+                rel_skipped_ambiguous=$((rel_skipped_ambiguous+1))
+                continue
+              fi
+              ;;
+          esac
           ;;
       esac
     fi

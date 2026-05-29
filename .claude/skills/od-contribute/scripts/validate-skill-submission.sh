@@ -73,29 +73,57 @@ else
   fi
 fi
 
-# Relative path scan: every '(./...)' or '(../...)' or '(<plain-path>)' link must resolve.
-# We deliberately ignore http(s):// links — those are link-checked elsewhere.
+# Relative path scan: every non-URL, non-anchor markdown link target must
+# resolve inside the skill folder.
+#
+# We extract ALL markdown links (`[label](target)`) and filter out URLs and
+# anchors here, rather than only matching dot-prefixed paths in the regex.
+# Plain intra-skill references like `[ref](references/foo.md)` or
+# `[script](scripts/run.sh)` are common and must be validated too — the
+# contract for SKILL.md says every relative path resolves on disk, regardless
+# of whether the author wrote `./references/foo.md` or `references/foo.md`.
+# A narrower `\(\.{1,2}/...\)` pattern would silently let bare paths through.
 BAD_REFS=0
 ESCAPE=0
+# Lexical escape check: count path segments and ensure no prefix walks above
+# the skill root. We do this on the literal target rather than from `cd … &&
+# pwd -P` so that a missing intermediate directory (which is itself a fail
+# we want to report) doesn't masquerade as an escape.
+escapes_root() {
+  local p="$1" depth=0 seg
+  # Strip a leading "./" if present.
+  p="${p#./}"
+  IFS='/' read -r -a _segs <<< "$p"
+  for seg in "${_segs[@]}"; do
+    case "$seg" in
+      ''|.) ;;
+      ..)   depth=$((depth-1)); (( depth < 0 )) && return 0 ;;
+      *)    depth=$((depth+1)) ;;
+    esac
+  done
+  return 1
+}
 while IFS= read -r ref; do
-  # Drop leading '(' if any from awk.
-  ref="${ref#(}"
-  ref="${ref%)}"
-  # Skip protocol URLs and anchors-only.
+  # Skip protocol URLs, mailto, anchors-only, and absolute paths.
   case "$ref" in
-    http*|mailto:*|\#*) continue ;;
+    http*|https*|mailto:*|tel:*|\#*|/*) continue ;;
   esac
-  resolved="$ABS_SKILL_DIR/$ref"
-  resolved_abs="$(cd "$(dirname "$resolved")" 2>/dev/null && pwd -P)/$(basename "$resolved")" || true
-  case "$resolved_abs" in
-    "$ABS_SKILL_DIR"/*) ;;
-    *) ESCAPE=1; fail "path escapes skill folder: $ref" ;;
-  esac
-  if [[ ! -e "$resolved" ]]; then
+  # Strip query and fragment components before resolving.
+  target="${ref%%#*}"
+  target="${target%%\?*}"
+  [[ -z "$target" ]] && continue
+  if escapes_root "$target"; then
+    ESCAPE=1
+    fail "path escapes skill folder: $ref"
+    continue
+  fi
+  if [[ ! -e "$ABS_SKILL_DIR/$target" ]]; then
     BAD_REFS=$((BAD_REFS+1))
     fail "referenced file does not exist: $ref"
   fi
-done < <(grep -oE '\(\.{1,2}/[^)]+\)' "$SKILL_MD" 2>/dev/null | sed 's/^(//; s/)$//' | sort -u)
+done < <(grep -oE '\!?\[[^]]*\]\([^)]+\)' "$SKILL_MD" 2>/dev/null \
+         | sed -E 's/.*\(([^)]+)\).*/\1/' \
+         | sort -u)
 
 if [[ "$BAD_REFS" -eq 0 && "$ESCAPE" -eq 0 ]]; then
   pass "all relative references resolve inside the skill folder"
