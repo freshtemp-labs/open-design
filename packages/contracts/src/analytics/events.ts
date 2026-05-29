@@ -177,6 +177,8 @@ export type TrackingExportFormat =
   | 'html'
   | 'markdown'
   | 'template'
+  | 'share_link'
+  | 'share_page'
   | 'vercel'
   | 'cloudflare_pages';
 

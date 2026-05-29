@@ -2069,6 +2069,8 @@ export interface Dict {
   'fileViewer.shareMenuPresentation': string;
   'fileViewer.shareMenuSourceFiles': string;
   'fileViewer.shareMenuSave': string;
+  'fileViewer.copyShareLink': string;
+  'fileViewer.openSharePage': string;
   'fileViewer.copyProviderLink': string;
   'fileViewer.copyCloudflareLink': string;
   'fileViewer.screenshotCopying': string;

@@ -54,7 +54,6 @@ import {
 import type { ProjectFilePreview } from '../providers/registry';
 import {
   exportAsHtml,
-  exportAsImage,
   exportAsJsx,
   exportAsMd,
   exportAsPdf,
@@ -63,10 +62,10 @@ import {
   exportReactComponentAsHtml,
   exportReactComponentAsZip,
   openSandboxedPreviewInNewTab,
-  requestPreviewSnapshot,
   requestPreviewSnapshotResult,
   type PreviewSnapshotResult,
 } from '../runtime/exports';
+import { copyToClipboard } from '../lib/copy-to-clipboard';
 import { buildReactComponentSrcdoc } from '../runtime/react-component';
 import { findHtmlEntriesReferencing } from '../runtime/jsx-module-refs';
 import { buildLazySrcdocTransport, buildSrcdoc, canActivateSrcDocTransport } from '../runtime/srcdoc';
@@ -3820,6 +3819,8 @@ function HtmlViewer({
       | 'html'
       | 'markdown'
       | 'template'
+      | 'share_link'
+      | 'share_page'
       | 'vercel'
       | 'cloudflare_pages',
     fn: () => Promise<unknown> | unknown,
@@ -4199,6 +4200,7 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
   const [templateSavedToast, setTemplateSavedToast] = useState<string | null>(null);
   const [deploySavedToast, setDeploySavedToast] = useState<{ message: string; details: string } | null>(null);
   const [exportToast, setExportToast] = useState<string | null>(null);
+  const [shareLinkFeedback, setShareLinkFeedback] = useState<'copied' | 'failed' | null>(null);
   const [selectedSideCommentIds, setSelectedSideCommentIds] = useState<Set<string>>(() => new Set());
   const [commentSidePanelCollapsed, setCommentSidePanelCollapsed] = useState(false);
   const [strokePoints, setStrokePoints] = useState<StrokePoint[]>([]);
@@ -5862,6 +5864,21 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
     }, 1800);
   }
 
+  async function copyShareLink(url: string) {
+    const safeUrl = url.trim();
+    if (!safeUrl) {
+      setShareLinkFeedback('failed');
+      return false;
+    }
+    const ok = await copyToClipboard(safeUrl);
+    const feedback = ok ? 'copied' : 'failed';
+    setShareLinkFeedback(feedback);
+    window.setTimeout(() => {
+      setShareLinkFeedback((current) => (current === feedback ? null : current));
+    }, 1800);
+    return ok;
+  }
+
   function presentInThisTab() {
     setPresentMenuOpen(false);
     setInTabPresent(true);
@@ -6268,6 +6285,19 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
     providerLabel: t(option.labelKey),
     url: deploymentsByProvider[option.id]?.url?.trim() || '',
   })).filter((item) => item.url);
+  const firstDeployedShareUrl = deployCopyLinks[0]?.url || '';
+  const sharePageUrl = useMemo(() => {
+    const rawUrl = firstDeployedShareUrl || projectRawUrl(projectId, file.name);
+    if (/^https?:\/\//i.test(rawUrl)) return rawUrl;
+    if (typeof window === 'undefined') return rawUrl;
+    return new URL(rawUrl, window.location.origin).toString();
+  }, [file.name, firstDeployedShareUrl, projectId]);
+  const copyShareLinkLabel =
+    shareLinkFeedback === 'copied'
+      ? t('fileViewer.copied')
+      : shareLinkFeedback === 'failed'
+        ? t('useEverywhere.copyFailed')
+        : t('fileViewer.copyShareLink');
   const deployButtonLabel =
     deployPhase === 'deploying'
       ? t('fileViewer.deployingToProvider', { provider: deployProviderLabel })
@@ -6278,12 +6308,6 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
     copiedDeployLink === url.trim()
       ? t('fileViewer.copied')
       : t('fileViewer.copyDeployLink');
-  const copyDeployMenuLabel = (providerLabel: string, url: string) =>
-    copiedDeployLink === url.trim()
-      ? t('fileViewer.copied')
-      : providerLabel.toLowerCase().includes('cloudflare')
-        ? t('fileViewer.copyCloudflareLink')
-        : t('fileViewer.copyProviderLink', { provider: providerLabel });
   const statusLabelFor = (state: ReturnType<typeof deployResultState>) => {
     if (state === 'ready') return t('fileViewer.deployLinkReady');
     if (state === 'protected') return t('fileViewer.deployLinkProtectedLabel');
@@ -6736,29 +6760,38 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
               </button>
               {shareMenuOpen ? (
                 <div className="share-menu-popover" role="menu">
-                  {deployCopyLinks.length > 0 ? (
-                    <>
-                      <div className="share-menu-section-label" role="presentation">
-                        {t('fileViewer.shareMenuShareLink')}
-                      </div>
-                      {deployCopyLinks.map((item) => (
-                        <button
-                          key={`copy-${item.providerId}`}
-                          type="button"
-                          className="share-menu-item"
-                          role="menuitem"
-                          onClick={() => {
-                            setShareMenuOpen(false);
-                            void copyDeployLink(item.url);
-                          }}
-                        >
-                          <span className="share-menu-icon"><RemixIcon name="file-copy-line" size={15} /></span>
-                          <span>{copyDeployMenuLabel(item.providerLabel, item.url)}</span>
-                        </button>
-                      ))}
-                      <div className="share-menu-divider" />
-                    </>
-                  ) : null}
+                  <div className="share-menu-section-label" role="presentation">
+                    {t('fileViewer.shareMenuShareLink')}
+                  </div>
+                  <button
+                    type="button"
+                    className="share-menu-item"
+                    role="menuitem"
+                    onClick={() => {
+                      fireShareExport('share_link', async () => {
+                        const ok = await copyShareLink(sharePageUrl);
+                        if (!ok) throw new Error('copy_share_link_failed');
+                      });
+                    }}
+                  >
+                    <span className="share-menu-icon"><RemixIcon name="file-copy-line" size={15} /></span>
+                    <span>{copyShareLinkLabel}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="share-menu-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setShareMenuOpen(false);
+                      fireShareExport('share_page', () => {
+                        window.open(sharePageUrl, '_blank', 'noopener,noreferrer');
+                      });
+                    }}
+                  >
+                    <span className="share-menu-icon"><RemixIcon name="external-link-line" size={15} /></span>
+                    <span>{t('fileViewer.openSharePage')}</span>
+                  </button>
+                  <div className="share-menu-divider" />
                   <div className="share-menu-section-label" role="presentation">
                     {t('fileViewer.shareMenuPublishOnline')}
                   </div>
@@ -6786,12 +6819,9 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
                   <div className="share-menu-section-label" role="presentation">
                     {t('fileViewer.shareMenuDownload')}
                   </div>
-                  <div className="share-menu-subsection-label" role="presentation">
-                    {t('fileViewer.shareMenuPresentation')}
-                  </div>
                   <button
                     type="button"
-                    className="share-menu-item share-menu-subitem"
+                    className="share-menu-item"
                     role="menuitem"
                     onClick={() => {
                       setShareMenuOpen(false);
@@ -6805,15 +6835,11 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
                     }}
                   >
                     <span className="share-menu-icon"><RemixIcon name="file-line" size={15} /></span>
-                    <span>
-                      {effectiveDeck
-                        ? t('fileViewer.exportPdfAllSlides')
-                        : t('fileViewer.exportPdf')}
-                    </span>
+                    <span>{t('fileViewer.exportPdf')}</span>
                   </button>
                   <button
                     type="button"
-                    className="share-menu-item share-menu-subitem"
+                    className="share-menu-item"
                     role="menuitem"
                     disabled={!canPptx}
                     title={
@@ -6831,41 +6857,11 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
                     }}
                   >
                     <span className="share-menu-icon"><RemixIcon name="file-ppt-line" size={15} /></span>
-                    <span>{t('fileViewer.exportPptx') + '…'}</span>
+                    <span>{t('fileViewer.exportPptx')}</span>
                   </button>
-                  {!useUrlLoadPreview ? (
-                    <button
-                      type="button"
-                      className="share-menu-item share-menu-subitem"
-                      role="menuitem"
-                      onClick={async () => {
-                        setShareMenuOpen(false);
-                        const iframe = iframeRef.current;
-                        if (!iframe) return;
-                        const snap = await requestPreviewSnapshot(iframe);
-                        try {
-                          if (snap) {
-                            exportAsImage(snap.dataUrl, exportTitle);
-                          } else {
-                            console.warn('[exportAsImage] snapshot capture returned null');
-                            alert(t('fileViewer.exportImageFailed'));
-                          }
-                        } catch (err) {
-                          console.warn('[exportAsImage] failed to convert snapshot:', err);
-                          alert(t('fileViewer.exportImageFailed'));
-                        }
-                      }}
-                    >
-                      <span className="share-menu-icon"><RemixIcon name="image-line" size={15} /></span>
-                      <span>{t('fileViewer.exportImage')}</span>
-                    </button>
-                  ) : null}
-                  <div className="share-menu-subsection-label" role="presentation">
-                    {t('fileViewer.shareMenuSourceFiles')}
-                  </div>
                   <button
                     type="button"
-                    className="share-menu-item share-menu-subitem"
+                    className="share-menu-item"
                     role="menuitem"
                     onClick={() => {
                       setShareMenuOpen(false);
@@ -6882,7 +6878,7 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
                   </button>
                   <button
                     type="button"
-                    className="share-menu-item share-menu-subitem"
+                    className="share-menu-item"
                     role="menuitem"
                     onClick={() => {
                       setShareMenuOpen(false);
@@ -6900,7 +6896,7 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
                       issue #279. */}
                   <button
                     type="button"
-                    className="share-menu-item share-menu-subitem"
+                    className="share-menu-item"
                     role="menuitem"
                     onClick={() => {
                       setShareMenuOpen(false);
