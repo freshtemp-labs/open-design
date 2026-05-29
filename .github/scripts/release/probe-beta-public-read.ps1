@@ -21,6 +21,25 @@ function Get-RequiredWebResponse([string]$Url) {
   return Invoke-WebRequest -UseBasicParsing -Uri $Url -Method Get
 }
 
+function Parse-JsonBody([string]$Body) {
+  if ([string]::IsNullOrWhiteSpace($Body)) {
+    throw "response body is empty"
+  }
+  $objectStart = $Body.IndexOf('{')
+  $arrayStart = $Body.IndexOf('[')
+  if ($objectStart -lt 0 -and $arrayStart -lt 0) {
+    throw "response body does not look like JSON"
+  }
+  if ($objectStart -ge 0 -and $arrayStart -ge 0) {
+    $start = [Math]::Min($objectStart, $arrayStart)
+  } elseif ($objectStart -ge 0) {
+    $start = $objectStart
+  } else {
+    $start = $arrayStart
+  }
+  return ($Body.Substring($start) | ConvertFrom-Json)
+}
+
 function Assert-PublicRangeReadable([string]$Url) {
   if ([string]::IsNullOrWhiteSpace($Url)) {
     throw "missing installer URL for public-read probe"
@@ -33,7 +52,7 @@ function Assert-PublicRangeReadable([string]$Url) {
 
 $resolvedMetadataUrl = Resolve-MetadataUrl
 $metadataResponse = Get-RequiredWebResponse $resolvedMetadataUrl
-$metadata = $metadataResponse.Content | ConvertFrom-Json
+$metadata = Parse-JsonBody $metadataResponse.Content
 $win = $metadata.platforms.win
 if ($null -eq $win) {
   throw "published metadata is missing platforms.win"
