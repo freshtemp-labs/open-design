@@ -24,10 +24,15 @@ esac
 od::require gh
 od::require git
 
-DATE_TAG="$(date +%Y%m%d)"
-SESSION_DIR="${TYPE}-${SLUG}-${DATE_TAG}"
+# Use second-precision timestamp so two contribution sessions on the same day
+# (or the SKILL.md i18n flow that calls setup-workspace.sh with a placeholder
+# slug like "translate" before the user has picked a language) don't collide
+# into the same workdir. Reusing a workdir would leak untracked / half-edited
+# files from an earlier abandoned session into a later contribution.
+SESSION_TAG="$(date +%Y%m%d-%H%M%S)"
+SESSION_DIR="${TYPE}-${SLUG}-${SESSION_TAG}"
 WORKDIR="$(od::workdir_for "$SESSION_DIR")"
-BRANCH="od-contrib/${TYPE}/${SLUG}-${DATE_TAG}"
+BRANCH="od-contrib/${TYPE}/${SLUG}-${SESSION_TAG}"
 
 mkdir -p "$OD_WORK_ROOT"
 od::assert_in_workroot "$WORKDIR"
@@ -35,11 +40,27 @@ od::assert_in_workroot "$WORKDIR"
 CLONE_URL="https://github.com/${TARGET_REPO}.git"
 
 if [[ -d "$WORKDIR/.git" ]]; then
+  # We reach here only if the user explicitly resumed by passing the same
+  # SESSION_TAG, or if the wall clock somehow produced a duplicate. Clean any
+  # untracked/dirty state so the run starts from a known good base instead of
+  # inheriting whatever the previous occupant left behind.
   od::log "reusing existing workdir: $WORKDIR"
   git -C "$WORKDIR" fetch origin --prune
+  git -C "$WORKDIR" reset --hard HEAD
+  git -C "$WORKDIR" clean -fdx
 else
   od::log "cloning $CLONE_URL → $WORKDIR (depth 50)"
   git clone --depth 50 "$CLONE_URL" "$WORKDIR"
+fi
+
+# Tell git to ignore our internal scratch dir so `git add -A` later (in
+# create-pr.sh) doesn't accidentally stage type.txt, slug.txt, PR-BODY.md
+# into the user's contribution PR. .git/info/exclude is repo-local and not
+# committed, so we don't pollute the OD repo's .gitignore.
+mkdir -p "$WORKDIR/.git/info"
+if ! grep -qxF '.od-contrib/' "$WORKDIR/.git/info/exclude" 2>/dev/null; then
+  printf '\n# od-contribute scratch dir (added by setup-workspace.sh)\n.od-contrib/\n' \
+    >> "$WORKDIR/.git/info/exclude"
 fi
 
 git -C "$WORKDIR" checkout "$OD_BASE_BRANCH"

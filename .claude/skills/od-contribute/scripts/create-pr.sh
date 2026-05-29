@@ -50,9 +50,16 @@ esac
 # ignores untracked files. The most common contribution shape — a brand-new
 # Skill folder, translation file, or doc — is 100% untracked at this point;
 # any predicate that misses untracked paths would silently push an empty PR.
-if [[ -n "$(git status --porcelain)" ]]; then
-  git add -A
-  # If even after `git add -A` the index is clean (e.g., changes were only in
+#
+# Belt-and-suspenders against the skill's internal scratch dir leaking into
+# the user's contribution PR: setup-workspace.sh adds `.od-contrib/` to
+# .git/info/exclude, but in case this script is invoked against a workdir
+# set up differently, also pass `:!.od-contrib` as a pathspec exclude so
+# nothing under .od-contrib/ gets staged here.
+SCRATCH_EXCLUDE=':!:.od-contrib'
+if [[ -n "$(git status --porcelain -- . "$SCRATCH_EXCLUDE")" ]]; then
+  git add -A -- . "$SCRATCH_EXCLUDE"
+  # If even after `git add` the index is clean (e.g., changes were only in
   # ignored paths or symlink mode bits), skip the commit instead of erroring.
   if git diff --cached --quiet; then
     od::log "no real changes after staging — skipping commit"
